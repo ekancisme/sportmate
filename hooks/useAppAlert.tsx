@@ -6,6 +6,8 @@ type AlertPayload = {
   title: string;
   message: string;
   variant: AppAlertVariant;
+  confirmLabel?: string;
+  cancelLabel?: string;
   onConfirm?: () => void;
 };
 
@@ -31,13 +33,20 @@ export function useAppAlert() {
     (
       title: string,
       message: string,
-      options?: { variant?: AppAlertVariant; onConfirm?: () => void },
+      options?: {
+        variant?: AppAlertVariant;
+        onConfirm?: () => void;
+        confirmLabel?: string;
+        cancelLabel?: string;
+      },
     ) => {
       setPayload({
         title,
         message,
         variant: options?.variant ?? 'info',
         onConfirm: options?.onConfirm,
+        confirmLabel: options?.confirmLabel,
+        cancelLabel: options?.cancelLabel,
       });
     },
     [],
@@ -58,6 +67,8 @@ export function useAppAlert() {
       title={payload?.title ?? ''}
       message={payload?.message ?? ''}
       variant={payload?.variant ?? 'info'}
+      confirmLabel={payload?.confirmLabel ?? 'OK'}
+      cancelLabel={payload?.cancelLabel}
       onConfirm={handleConfirm}
       onDismiss={hide}
     />

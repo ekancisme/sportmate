@@ -1,9 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
 import { getApiBaseUrl } from '@/lib/apiBase';
+import { fetchMatchById, updateMatch, type ApiMatch } from '@/lib/matchApi';
 
 const SPORTS = [
   'Bóng Đá',
@@ -176,7 +177,44 @@ const initialForm: MatchForm = {
   rules: '',
 };
 
+function apiMatchToForm(m: ApiMatch): MatchForm {
+  const sportList = SPORTS as readonly string[];
+  const sportIn = sportList.includes(m.sport) ? m.sport : 'Khác';
+  const sportOther = sportIn === 'Khác' ? m.sport : '';
+  const mpStr = String(m.maxPlayers);
+  const pc = PLAYER_COUNTS as readonly string[];
+  const mpIn = (pc as readonly string[]).includes(mpStr) ? mpStr : 'Khác';
+  const maxPlayersOther = mpIn === 'Khác' ? mpStr : '';
+  const sl = SKILL_LEVELS as readonly string[];
+  const skillIn = (sl as readonly string[]).includes(m.minSkillLevel)
+    ? m.minSkillLevel
+    : 'Khác';
+  const skillOther = skillIn === 'Khác' ? m.minSkillLevel : '';
+  return {
+    sport: sportIn,
+    sportOther,
+    title: m.title,
+    location: m.location,
+    date: m.date,
+    time: m.time,
+    maxPlayers: mpIn,
+    maxPlayersOther,
+    minSkillLevel: skillIn,
+    skillOther,
+    description: m.description || '',
+    rules: m.rules || '',
+  };
+}
+
 export default function CreateMatch() {
+  const params = useLocalSearchParams<{ editId?: string }>();
+  const editId = params.editId
+    ? Array.isArray(params.editId)
+      ? params.editId[0]
+      : params.editId
+    : undefined;
+  const isEditMode = Boolean(editId);
+
   const { user } = useAuth();
   const { show: showAlert, Alert: AppAlertNode } = useAppAlert();
   const insets = useSafeAreaInsets();
@@ -190,6 +228,41 @@ export default function CreateMatch() {
   const [tempTimeStart, setTempTimeStart] = useState(() => new Date());
   const [tempTimeEnd, setTempTimeEnd] = useState(() => new Date());
   const [submitting, setSubmitting] = useState(false);
+  const [loadingMatch, setLoadingMatch] = useState(!!editId);
+
+  useEffect(() => {
+    if (!editId || !user?.id) {
+      setLoadingMatch(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await fetchMatchById(editId);
+        if (cancelled) return;
+        if (raw.hostId && raw.hostId !== user.id) {
+          showAlert('Không thể sửa', 'Bạn không phải host của trận này.', {
+            variant: 'error',
+            onConfirm: () => router.back(),
+          });
+          return;
+        }
+        setForm(apiMatchToForm(raw));
+      } catch {
+        if (!cancelled) {
+          showAlert('Lỗi', 'Không tải được trận để sửa.', {
+            variant: 'error',
+            onConfirm: () => router.back(),
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingMatch(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId, user?.id]);
 
   const scrollMultilineIntoView = () => {
     requestAnimationFrame(() => {
@@ -211,7 +284,11 @@ export default function CreateMatch() {
 
   const handleSubmit = async () => {
     if (!user?.id) {
-      showAlert('Cần đăng nhập', 'Vui lòng đăng nhập để tạo trận đấu.', { variant: 'error' });
+      showAlert(
+        'Cần đăng nhập',
+        isEditMode ? 'Vui lòng đăng nhập để sửa trận.' : 'Vui lòng đăng nhập để tạo trận đấu.',
+        { variant: 'error' },
+      );
       return;
     }
 
@@ -274,7 +351,7 @@ export default function CreateMatch() {
         return;
       }
     }
-    if (startAt.getTime() < Date.now() - 30 * 1000) {
+    if (!isEditMode && startAt.getTime() < Date.now() - 30 * 1000) {
       showAlert('Thời gian', 'Không thể chọn ngày giờ trong quá khứ.', { variant: 'error' });
       return;
     }
@@ -282,11 +359,8 @@ export default function CreateMatch() {
     const base = getApiBaseUrl();
     setSubmitting(true);
     try {
-      const res = await fetch(`${base}/api/matches`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hostId: user.id,
+      if (isEditMode && editId) {
+        await updateMatch(editId, user.id, {
           sport: sportResolved,
           title: form.title.trim(),
           location: form.location.trim(),
@@ -296,21 +370,46 @@ export default function CreateMatch() {
           minSkillLevel: skillResolved,
           description: form.description.trim(),
           rules: form.rules.trim(),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showAlert('Không tạo được trận', data?.error || `Lỗi ${res.status}`, { variant: 'error' });
-        return;
+        });
+        showAlert('Thành công', 'Đã cập nhật trận đấu.', {
+          variant: 'success',
+          onConfirm: () => router.back(),
+        });
+      } else {
+        const res = await fetch(`${base}/api/matches`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hostId: user.id,
+            sport: sportResolved,
+            title: form.title.trim(),
+            location: form.location.trim(),
+            date: form.date.trim(),
+            time: form.time.trim(),
+            maxPlayers: maxN,
+            minSkillLevel: skillResolved,
+            description: form.description.trim(),
+            rules: form.rules.trim(),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showAlert('Không tạo được trận', data?.error || `Lỗi ${res.status}`, {
+            variant: 'error',
+          });
+          return;
+        }
+        showAlert('Thành công', 'Đã tạo trận đấu.', {
+          variant: 'success',
+          onConfirm: () => router.back(),
+        });
       }
-      showAlert('Thành công', 'Đã tạo trận đấu.', {
-        variant: 'success',
-        onConfirm: () => router.back(),
-      });
-    } catch {
-      showAlert('Lỗi mạng', 'Không kết nối được server. Kiểm tra API đang chạy.', {
-        variant: 'error',
-      });
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'Không kết nối được server. Kiểm tra API đang chạy.';
+      showAlert('Lỗi', msg, { variant: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -509,6 +608,21 @@ export default function CreateMatch() {
 
   const bottomPad = insets.bottom + 280;
 
+  if (loadingMatch) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#050505',
+        }}>
+        <ActivityIndicator color={PRIMARY} size="large" />
+        <Text style={{ color: '#888', marginTop: 14, fontSize: 15 }}>Đang tải trận...</Text>
+      </View>
+    );
+  }
+
   return (
     <>
       <KeyboardAvoidingView
@@ -529,11 +643,13 @@ export default function CreateMatch() {
         <Pressable style={styles.headerBtn} onPress={() => router.back()}>
           <Text style={styles.headerBtnText}>←</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Tạo trận đấu</Text>
+        <Text style={styles.headerTitle}>{isEditMode ? 'Sửa trận đấu' : 'Tạo trận đấu'}</Text>
         <View style={styles.headerBtnPlaceholder} />
       </View>
       <Text style={styles.subtitle}>
-        Điền thông tin chi tiết để các người chơi khác có thể tham gia dễ dàng.
+        {isEditMode
+          ? 'Cập nhật thông tin trận. Người đã tham gia vẫn được giữ.'
+          : 'Điền thông tin chi tiết để các người chơi khác có thể tham gia dễ dàng.'}
       </Text>
 
       <View style={styles.sportSection}>
@@ -948,7 +1064,7 @@ export default function CreateMatch() {
         {submitting ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.submitText}>Tạo trận đấu</Text>
+          <Text style={styles.submitText}>{isEditMode ? 'Lưu thay đổi' : 'Tạo trận đấu'}</Text>
         )}
       </Pressable>
         </ScrollView>

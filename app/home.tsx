@@ -1,5 +1,17 @@
-import { StyleSheet, Text, View, Pressable, ScrollView } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { router } from 'expo-router';
+
+import { fetchMatches, formatMatchListSubtitle, type ApiMatch } from '@/lib/matchApi';
 
 type SuggestedPlayer = {
   id: string;
@@ -8,15 +20,6 @@ type SuggestedPlayer = {
   level: string;
   distance: string;
   winRate: number;
-};
-
-type UpcomingMatch = {
-  id: string;
-  title: string;
-  sport: string;
-  location: string;
-  time: string;
-  players: string;
 };
 
 const SUGGESTED_PLAYERS: SuggestedPlayer[] = [
@@ -44,38 +47,104 @@ const SUGGESTED_PLAYERS: SuggestedPlayer[] = [
     distance: '3.1 km',
     winRate: 48,
   },
+  {
+    id: 'p4',
+    name: 'Phạm Thị C',
+    sport: 'Cầu Lông',
+    level: 'Trung bình',
+    distance: '1.8 km',
+    winRate: 55,
+  },
+  {
+    id: 'p5',
+    name: 'Đỗ Văn D',
+    sport: 'Bóng đá',
+    level: 'Cao',
+    distance: '0.9 km',
+    winRate: 68,
+  },
+  {
+    id: 'p6',
+    name: 'Ngô Thị E',
+    sport: 'Chạy bộ',
+    level: 'Sơ cấp',
+    distance: '2.2 km',
+    winRate: 42,
+  },
+  {
+    id: 'p7',
+    name: 'Vũ Minh F',
+    sport: 'Bóng rổ',
+    level: 'Trung bình',
+    distance: '3.0 km',
+    winRate: 59,
+  },
+  {
+    id: 'p8',
+    name: 'Trần Hải G',
+    sport: 'Pickleball',
+    level: 'Advanced',
+    distance: '1.5 km',
+    winRate: 71,
+  },
+  {
+    id: 'p9',
+    name: 'Lê Thu H',
+    sport: 'Yoga',
+    level: 'Tất cả',
+    distance: '2.8 km',
+    winRate: 52,
+  },
 ];
 
-const UPCOMING_MATCHES: UpcomingMatch[] = [
-  {
-    id: 'm1',
-    title: 'Giao hữu bóng đá tối thứ 6',
-    sport: 'Football',
-    location: 'Sân Hoa Lư, Quận 1',
-    time: '20:00 hôm nay',
-    players: '14/20',
-  },
-  {
-    id: 'm2',
-    title: 'Cầu lông sáng cuối tuần',
-    sport: 'Badminton',
-    location: 'CLB Cầu Lông Phú Nhuận',
-    time: '09:00 Thứ 7',
-    players: '6/8',
-  },
-  {
-    id: 'm3',
-    title: 'Pick-up basketball',
-    sport: 'Basketball',
-    location: 'Sân ngoài trời Thảo Điền',
-    time: '18:30 Thứ 5',
-    players: '8/10',
-  },
-];
+const PARTNERS_PER_PAGE = 1;
+
+function chunkPlayers<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
+}
 
 export default function HomeScreen() {
+  const { width: windowWidth } = useWindowDimensions();
+  const partnerPageWidth = windowWidth - 40;
+  const partnerPages = useMemo(
+    () => chunkPlayers(SUGGESTED_PLAYERS, PARTNERS_PER_PAGE),
+    [],
+  );
+  const [partnerPageIndex, setPartnerPageIndex] = useState(0);
+
+  const [matches, setMatches] = useState<ApiMatch[]>([]);
+  const [matchesLoading, setMatchesLoading] = useState(true);
+  const [matchesError, setMatchesError] = useState<string | null>(null);
+
+  const loadMatches = useCallback(async () => {
+    setMatchesLoading(true);
+    setMatchesError(null);
+    try {
+      const list = await fetchMatches();
+      setMatches(list);
+    } catch (e) {
+      setMatchesError(e instanceof Error ? e.message : 'Không tải được trận');
+      setMatches([]);
+    } finally {
+      setMatchesLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMatches();
+    }, [loadMatches]),
+  );
+
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={styles.content}
+      nestedScrollEnabled>
       <View style={styles.headerSpacer} />
 
       <View style={styles.heroCard}>
@@ -116,7 +185,7 @@ export default function HomeScreen() {
           <Text style={styles.quickTitle}>Hồ sơ của bạn</Text>
           <Text style={styles.quickSubtitle}>Cập nhật môn thể thao và lịch tập</Text>
         </Pressable>
-        <Pressable style={styles.quickCard} onPress={() => router.push('/match')}>
+        <Pressable style={styles.quickCard} onPress={() => router.push('/(tabs)/')}>
           <Text style={styles.quickTitle}>Trận nổi bật</Text>
           <Text style={styles.quickSubtitle}>Xem chi tiết các trận đang mở</Text>
         </Pressable>
@@ -124,48 +193,101 @@ export default function HomeScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Những partner tuyệt vời</Text>
-        {SUGGESTED_PLAYERS.map((p) => (
-          <Pressable
-            key={p.id}
-            style={styles.partnerCard}
-            onPress={() => router.push({ pathname: '/profile', params: { id: p.id } })}>
-            <View style={styles.partnerAvatar}>
-              <Text style={styles.partnerAvatarText}>{p.name.charAt(0)}</Text>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          style={[styles.partnerPager, { width: partnerPageWidth }]}
+          onMomentumScrollEnd={(e) => {
+            const x = e.nativeEvent.contentOffset.x;
+            const page = Math.round(x / partnerPageWidth);
+            const last = partnerPages.length - 1;
+            setPartnerPageIndex(Math.min(Math.max(0, page), last));
+          }}>
+          {partnerPages.map((page, pageIdx) => (
+            <View
+              key={`partner-page-${pageIdx}`}
+              style={[styles.partnerPage, { width: partnerPageWidth }]}>
+              {page.map((p) => (
+                <Pressable
+                  key={p.id}
+                  style={styles.partnerCard}
+                  onPress={() => router.push({ pathname: '/profile', params: { id: p.id } })}>
+                  <View style={styles.partnerAvatar}>
+                    <Text style={styles.partnerAvatarText}>{p.name.charAt(0)}</Text>
+                  </View>
+                  <View style={styles.partnerMain}>
+                    <Text style={styles.partnerName}>{p.name}</Text>
+                    <Text style={styles.partnerMeta}>
+                      {p.sport} • {p.level}
+                    </Text>
+                    <View style={styles.partnerChipsRow}>
+                      <View style={styles.partnerChip}>
+                        <Text style={styles.partnerChipText}>{p.distance} gần bạn</Text>
+                      </View>
+                      <View style={[styles.partnerChip, styles.partnerChipGhost]}>
+                        <Text style={styles.partnerChipGhostText}>Win rate {p.winRate}%</Text>
+                      </View>
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
             </View>
-            <View style={styles.partnerMain}>
-              <Text style={styles.partnerName}>{p.name}</Text>
-              <Text style={styles.partnerMeta}>
-                {p.sport} • {p.level}
-              </Text>
-              <View style={styles.partnerChipsRow}>
-                <View style={styles.partnerChip}>
-                  <Text style={styles.partnerChipText}>{p.distance} gần bạn</Text>
-                </View>
-                <View style={[styles.partnerChip, styles.partnerChipGhost]}>
-                  <Text style={styles.partnerChipGhostText}>Win rate {p.winRate}%</Text>
-                </View>
-              </View>
-            </View>
-          </Pressable>
-        ))}
+          ))}
+        </ScrollView>
+        {partnerPages.length > 1 ? (
+          <View style={styles.partnerDots}>
+            {partnerPages.map((_, i) => (
+              <View
+                key={`partner-dot-${i}`}
+                style={[
+                  styles.partnerDot,
+                  i === partnerPageIndex && styles.partnerDotActive,
+                ]}
+              />
+            ))}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Trận đấu sắp diễn ra</Text>
-        {UPCOMING_MATCHES.map((m) => (
-          <Pressable
-            key={m.id}
-            style={styles.matchCard}
-            onPress={() => router.push({ pathname: '/match', params: { id: m.id } })}>
-            <View style={styles.matchHeaderRow}>
-              <Text style={styles.matchTitle}>{m.title}</Text>
-              <Text style={styles.matchSport}>{m.sport}</Text>
-            </View>
-            <Text style={styles.matchMeta}>{m.location}</Text>
-            <Text style={styles.matchMeta}>{m.time}</Text>
-            <Text style={styles.matchPlayers}>Người chơi: {m.players}</Text>
-          </Pressable>
-        ))}
+        {matchesLoading ? (
+          <View style={styles.matchesLoading}>
+            <ActivityIndicator color="#ff4d4f" />
+            <Text style={styles.matchesLoadingText}>Đang tải...</Text>
+          </View>
+        ) : matchesError ? (
+          <View style={styles.matchesErrorBox}>
+            <Text style={styles.matchesErrorText}>{matchesError}</Text>
+            <Pressable style={styles.matchesRetry} onPress={loadMatches}>
+              <Text style={styles.matchesRetryText}>Thử lại</Text>
+            </Pressable>
+          </View>
+        ) : matches.length === 0 ? (
+          <Text style={styles.matchesEmpty}>Chưa có trận nào. Tạo trận mới để bắt đầu.</Text>
+        ) : (
+          matches.map((m) => {
+            const cur = Number(m.currentPlayers ?? 0);
+            const playersStr = `${cur}/${m.maxPlayers}`;
+            return (
+              <Pressable
+                key={m.id}
+                style={styles.matchCard}
+                onPress={() => router.push({ pathname: '/match', params: { id: m.id } })}>
+                <View style={styles.matchHeaderRow}>
+                  <Text style={styles.matchTitle}>{m.title}</Text>
+                  <Text style={styles.matchSport}>{m.sport}</Text>
+                </View>
+                <Text style={styles.matchMeta}>{m.location}</Text>
+                <Text style={styles.matchMeta}>{formatMatchListSubtitle(m)}</Text>
+                <Text style={styles.matchPlayers}>Người chơi: {playersStr}</Text>
+              </Pressable>
+            );
+          })
+        )}
       </View>
     </ScrollView>
   );
@@ -306,6 +428,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
+  partnerPager: {
+    alignSelf: 'center',
+  },
+  partnerPage: {
+    gap: 10,
+    paddingBottom: 4,
+  },
+  partnerDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  partnerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#444',
+  },
+  partnerDotActive: {
+    backgroundColor: '#ff4d4f',
+    width: 18,
+  },
   partnerCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -370,6 +516,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 12,
+    marginBottom: 10,
   },
   matchHeaderRow: {
     flexDirection: 'row',
@@ -398,6 +545,41 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '500',
+  },
+  matchesLoading: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  matchesLoadingText: {
+    color: '#888',
+    fontSize: 13,
+  },
+  matchesErrorBox: {
+    paddingVertical: 8,
+  },
+  matchesErrorText: {
+    color: '#ff8888',
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  matchesRetry: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ff4d4f',
+  },
+  matchesRetryText: {
+    color: '#ff4d4f',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  matchesEmpty: {
+    color: '#888',
+    fontSize: 13,
+    lineHeight: 20,
   },
 });
 

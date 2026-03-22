@@ -17,6 +17,8 @@ export type AppAlertProps = {
   variant?: AppAlertVariant;
   /** Mặc định: OK */
   confirmLabel?: string;
+  /** Nút phụ (ví dụ Hủy) — gọi onDismiss */
+  cancelLabel?: string;
   /** Màu chủ đạo (nút + icon). Mặc định #ff4d4f */
   accentColor?: string;
   /**
@@ -37,6 +39,7 @@ export function AppAlert({
   message,
   variant = 'info',
   confirmLabel = 'OK',
+  cancelLabel,
   accentColor = DEFAULT_ACCENT,
   backdropDismissable,
   onConfirm,
@@ -53,7 +56,7 @@ export function AppAlert({
           if (canDismissBackdrop) onDismiss();
         }}
       >
-        <View style={styles.card}>
+        <Pressable style={styles.card} onPress={() => {}}>
           {variant === 'success' ? (
             <Ionicons name="checkmark-circle" size={48} color={accentColor} style={styles.icon} />
           ) : variant === 'error' ? (
@@ -63,10 +66,21 @@ export function AppAlert({
           )}
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
-          <Pressable style={[styles.btn, { backgroundColor: accentColor }]} onPress={onConfirm}>
-            <Text style={styles.btnText}>{confirmLabel}</Text>
-          </Pressable>
-        </View>
+          {cancelLabel ? (
+            <View style={styles.btnRow}>
+              <Pressable style={styles.btnGhost} onPress={onDismiss}>
+                <Text style={styles.btnGhostText}>{cancelLabel}</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, { backgroundColor: accentColor }]} onPress={onConfirm}>
+                <Text style={styles.btnText}>{confirmLabel}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable style={[styles.btn, styles.btnSingle, { backgroundColor: accentColor }]} onPress={onConfirm}>
+              <Text style={styles.btnText}>{confirmLabel}</Text>
+            </Pressable>
+          )}
+        </Pressable>
       </Pressable>
     </Modal>
   );
@@ -108,12 +122,40 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  btn: {
+  btnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'stretch',
+  },
+  btnGhost: {
+    flex: 1,
     borderRadius: 999,
     paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#3a3a3a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnGhostText: {
+    color: '#ccc',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  btnSingle: {
     paddingHorizontal: 40,
     minWidth: 120,
+  },
+  btn: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minWidth: 100,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   btnText: {
     color: '#fff',
