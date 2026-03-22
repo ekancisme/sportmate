@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { router } from 'expo-router';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -178,10 +178,17 @@ export default function MyProfile() {
 
       <View style={styles.actionsRow}>
         <Pressable
+          style={[styles.secondaryBtn, styles.actionBtn]}
+          onPress={() => router.push('/match/my-matches')}>
+          <Text style={styles.secondaryBtnText}>Trận của tôi</Text>
+        </Pressable>
+        <Pressable
           style={[styles.primaryBtn, styles.actionBtn]}
           onPress={() => router.push('/match/create-match')}>
           <Text style={styles.primaryBtnText}>+ Tạo trận đấu</Text>
         </Pressable>
+      </View>
+      <View style={styles.actionsRowSingle}>
         <Pressable
           style={[styles.secondaryBtn, styles.actionBtn]}
           onPress={() => {
@@ -488,6 +495,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginTop: 4,
+  },
+  actionsRowSingle: {
+    marginTop: 10,
   },
   actionBtn: {
     flex: 1,
