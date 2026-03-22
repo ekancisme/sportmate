@@ -35,6 +35,22 @@ npm run reset-project
 
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
+## SportMate API (server)
+
+Server nằm trong thư mục `server/`.
+
+```bash
+cd server
+npm install
+```
+
+- Copy `server/.env.example` → `server/.env` và **bắt buộc** có `MONGODB_URI` (server chỉ dùng biến này, không hardcode URI trong code).
+- **Quên mật khẩu qua email:** cấu hình SMTP (Gmail cần [App Password](https://support.google.com/accounts/answer/185833)). Nếu không cấu hình, server sẽ **in mã ra terminal** (chỉ để dev).
+
+```bash
+npm start
+```
+
 ## Learn more
 
 To learn more about developing your project with Expo, look at the following resources:

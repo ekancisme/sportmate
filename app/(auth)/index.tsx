@@ -13,6 +13,40 @@ import {
 
 import { useAuth } from '@/contexts/AuthContext';
 
+const MIN_PASSWORD_LEN = 8;
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function validateLogin(identifier: string, password: string): string | null {
+  if (!identifier.trim()) return 'Vui lòng nhập email hoặc tên đăng nhập';
+  if (!password) return 'Vui lòng nhập mật khẩu';
+  return null;
+}
+
+function validateRegister(
+  fullName: string,
+  email: string,
+  phone: string,
+  password: string,
+  confirm: string,
+  agreed: boolean,
+): string | null {
+  const name = fullName.trim();
+  if (name.length < 2) return 'Họ tên phải có ít nhất 2 ký tự';
+  if (!email.trim()) return 'Vui lòng nhập email';
+  if (!isValidEmail(email)) return 'Email không hợp lệ';
+  const p = phone.trim();
+  if (p && !/^[\d\s\-\+\(\)]+$/.test(p)) return 'Số điện thoại không hợp lệ';
+  if (!password || password.length < MIN_PASSWORD_LEN) {
+    return `Mật khẩu phải có ít nhất ${MIN_PASSWORD_LEN} ký tự`;
+  }
+  if (password !== confirm) return 'Mật khẩu xác nhận không khớp';
+  if (!agreed) return 'Vui lòng đồng ý Điều khoản sử dụng';
+  return null;
+}
+
 export default function AuthScreen() {
   const { login, register, loading } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -50,6 +84,11 @@ export default function AuthScreen() {
   const handleSubmit = async () => {
     setError(null);
     if (mode === 'login') {
+      const v = validateLogin(loginIdentifier, loginPassword);
+      if (v) {
+        setError(v);
+        return;
+      }
       const result = await login({
         identifier: loginIdentifier.trim(),
         password: loginPassword,
@@ -76,7 +115,18 @@ export default function AuthScreen() {
       }
       router.replace('/(tabs)/');
     } else {
-      // Tạm thời tắt validate chi tiết để ưu tiên flow đăng ký/đăng nhập
+      const v = validateRegister(
+        regUsername,
+        regEmail,
+        regPhone,
+        regPassword,
+        regConfirmPassword,
+        agreed,
+      );
+      if (v) {
+        setError(v);
+        return;
+      }
       const result = await register({
         fullName: regUsername.trim(),
         email: regEmail.trim(),
@@ -152,7 +202,7 @@ export default function AuthScreen() {
                   <Text style={styles.checkboxLabel}>Remember me</Text>
                 </Pressable>
               </View>
-              <Pressable style={styles.forgotRow}>
+              <Pressable style={styles.forgotRow} onPress={() => router.push('/(auth)/forgot-password')}>
                 <Text style={styles.linkMuted}>Forgot password?</Text>
               </Pressable>
             </>

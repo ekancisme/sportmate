@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import {
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -121,17 +122,23 @@ export default function EditProfileScreen() {
 
     try {
       const form = new FormData();
-      form.append('avatar', {
-        uri,
-        name: 'avatar.jpg',
-        type: 'image/jpeg',
-      } as any);
+      // Web: phải append Blob/File — và KHÔNG set Content-Type thủ công (cần boundary).
+      // Native: append object { uri, name, type }.
+      if (Platform.OS === 'web') {
+        const imgRes = await fetch(uri);
+        const blob = await imgRes.blob();
+        const ext = asset.mimeType?.split('/')[1] || 'jpeg';
+        form.append('avatar', blob, `avatar.${ext}`);
+      } else {
+        form.append('avatar', {
+          uri,
+          name: 'avatar.jpg',
+          type: asset.mimeType || 'image/jpeg',
+        } as any);
+      }
 
       const res = await fetch(`${apiBase}/api/users/${authUser.id}/avatar`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
         body: form,
       });
 

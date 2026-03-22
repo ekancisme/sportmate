@@ -39,6 +39,14 @@ type AuthContextValue = {
     phone?: string;
     password: string;
   }) => Promise<{ ok: boolean; error?: string }>;
+  /** Gửi mã đặt lại mật khẩu tới email */
+  requestPasswordReset: (email: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Đặt lại mật khẩu bằng mã 6 số */
+  resetPassword: (options: {
+    email: string;
+    code: string;
+    newPassword: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   setUserFromServer: (user: AuthUser) => void;
 };
@@ -118,6 +126,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const requestPasswordReset: AuthContextValue['requestPasswordReset'] = async (email) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const base = (data?.error as string) || 'Không thể gửi mã';
+        const detail = data?.detail ? `\n${String(data.detail)}` : '';
+        return { ok: false, error: base + detail };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Không thể kết nối máy chủ' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword: AuthContextValue['resetPassword'] = async ({ email, code, newPassword }) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), code: code.trim(), newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { ok: false, error: data?.error || 'Đặt lại mật khẩu thất bại' };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Không thể kết nối máy chủ' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = () => {
     setUser(null);
   };
@@ -129,6 +179,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     login,
     register,
+    requestPasswordReset,
+    resetPassword,
     logout,
     setUserFromServer,
   };
