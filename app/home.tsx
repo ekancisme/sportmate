@@ -17,96 +17,9 @@ import {
   formatMatchListSubtitle,
   type ApiMatch,
 } from "@/lib/matchApi";
+import { useAuth, type SuggestedPartner } from "@/contexts/AuthContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-type SuggestedPlayer = {
-  id: string;
-  name: string;
-  sport: string;
-  level: string;
-  distance: number | string | null;
-  winRate: number;
-  bio?: string;
-  age?: number;
-  location?: string;
-  avatar?: string;
-};
-
-const SUGGESTED_PLAYERS: SuggestedPlayer[] = [
-  {
-    id: "p1",
-    name: "Minh Trần",
-    sport: "Football",
-    level: "Intermediate",
-    distance: "1.2 km",
-    winRate: 61,
-  },
-  {
-    id: "p2",
-    name: "Lan Nguyễn",
-    sport: "Badminton",
-    level: "Advanced",
-    distance: "2.5 km",
-    winRate: 74,
-  },
-  {
-    id: "p3",
-    name: "Hoàng Lê",
-    sport: "Tennis",
-    level: "Beginner",
-    distance: "3.1 km",
-    winRate: 48,
-  },
-  {
-    id: "p4",
-    name: "Phạm Thị C",
-    sport: "Cầu Lông",
-    level: "Trung bình",
-    distance: "1.8 km",
-    winRate: 55,
-  },
-  {
-    id: "p5",
-    name: "Đỗ Văn D",
-    sport: "Bóng đá",
-    level: "Cao",
-    distance: "0.9 km",
-    winRate: 68,
-  },
-  {
-    id: "p6",
-    name: "Ngô Thị E",
-    sport: "Chạy bộ",
-    level: "Sơ cấp",
-    distance: "2.2 km",
-    winRate: 42,
-  },
-  {
-    id: "p7",
-    name: "Vũ Minh F",
-    sport: "Bóng rổ",
-    level: "Trung bình",
-    distance: "3.0 km",
-    winRate: 59,
-  },
-  {
-    id: "p8",
-    name: "Trần Hải G",
-    sport: "Pickleball",
-    level: "Advanced",
-    distance: "1.5 km",
-    winRate: 71,
-  },
-  {
-    id: "p9",
-    name: "Lê Thu H",
-    sport: "Yoga",
-    level: "Tất cả",
-    distance: "2.8 km",
-    winRate: 52,
-  },
-];
 
 const PARTNERS_PER_PAGE = 1;
 
@@ -121,15 +34,36 @@ function chunkPlayers<T>(arr: T[], size: number): T[][] {
 export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const partnerPageWidth = windowWidth - 40;
-  const partnerPages = useMemo(
-    () => chunkPlayers(SUGGESTED_PLAYERS, PARTNERS_PER_PAGE),
-    [],
-  );
   const [partnerPageIndex, setPartnerPageIndex] = useState(0);
+
+  const { user, fetchSuggestedPartners } = useAuth();
+
+  const [partners, setPartners] = useState<SuggestedPartner[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(true);
+  const [partnersError, setPartnersError] = useState<string | null>(null);
 
   const [matches, setMatches] = useState<ApiMatch[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(true);
   const [matchesError, setMatchesError] = useState<string | null>(null);
+
+  const partnerPages = useMemo(
+    () => chunkPlayers(partners, PARTNERS_PER_PAGE),
+    [partners],
+  );
+
+  const loadPartners = useCallback(async () => {
+    setPartnersLoading(true);
+    setPartnersError(null);
+    try {
+      const result = await fetchSuggestedPartners({ limit: 20 });
+      setPartners(result.partners);
+    } catch (e) {
+      setPartnersError(e instanceof Error ? e.message : "Không tải được partner");
+      setPartners([]);
+    } finally {
+      setPartnersLoading(false);
+    }
+  }, [fetchSuggestedPartners, user?.id]);
 
   const loadMatches = useCallback(async () => {
     setMatchesLoading(true);
@@ -147,8 +81,9 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      loadPartners();
       loadMatches();
-    }, [loadMatches]),
+    }, [loadPartners, loadMatches]),
   );
 
   return (
@@ -187,11 +122,13 @@ export default function HomeScreen() {
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Text style={styles.statLabel}>Trận tuần này</Text>
-          <Text style={styles.statValue}>24</Text>
+          <Text style={styles.statValue}>{matches.length || "..."}</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statLabel}>Đồng đội quanh bạn</Text>
-          <Text style={styles.statValue}>{SUGGESTED_PLAYERS.length || "..."}</Text>
+          <Text style={styles.statValue}>
+            {partnersLoading ? "..." : partners.length}
+          </Text>
         </View>
       </View>
 
@@ -217,77 +154,99 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Những partner tuyệt vời</Text>
-        <ScrollView
-          horizontal
-          pagingEnabled
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          style={[styles.partnerPager, { width: partnerPageWidth }]}
-          onMomentumScrollEnd={(e) => {
-            const x = e.nativeEvent.contentOffset.x;
-            const page = Math.round(x / partnerPageWidth);
-            const last = partnerPages.length - 1;
-            setPartnerPageIndex(Math.min(Math.max(0, page), last));
-          }}
-        >
-          {partnerPages.map((page, pageIdx) => (
-            <View
-              key={`partner-page-${pageIdx}`}
-              style={[styles.partnerPage, { width: partnerPageWidth }]}
-            >
-              {page.map((p) => (
-                <Pressable
-                  key={p.id}
-                  style={styles.partnerCard}
-                  onPress={() =>
-                    router.push({ pathname: "/profile", params: { id: p.id } })
-                  }
-                >
-                  <View style={styles.partnerAvatar}>
-                    <Text style={styles.partnerAvatarText}>
-                      {p.name.charAt(0)}
-                    </Text>
-                  </View>
-                  <View style={styles.partnerMain}>
-                    <Text style={styles.partnerName}>{p.name}</Text>
-                    <Text style={styles.partnerMeta}>
-                      {p.sport} • {p.level}
-                    </Text>
-                    <View style={styles.partnerChipsRow}>
-                      <View style={styles.partnerChip}>
-                        <Text style={styles.partnerChipText}>
-                          {p.distance} gần bạn
-                        </Text>
+        <View style={styles.partnerSectionHeader}>
+          <Text style={styles.sectionTitle}>Những partner tuyệt vời</Text>
+          {!partnersLoading && partners.length > 0 && (
+            <Text style={styles.partnerPagination}>
+              {partnerPageIndex + 1} / {partnerPages.length}
+            </Text>
+          )}
+        </View>
+        
+        {partnersLoading ? (
+          <View style={styles.partnerLoadingCard}>
+            <ActivityIndicator color="#ff4d4d" />
+            <Text style={styles.partnerLoadingText}>Đang tải partner...</Text>
+          </View>
+        ) : partnersError ? (
+          <View style={styles.partnerErrorCard}>
+            <Text style={styles.partnerErrorText}>{partnersError}</Text>
+            <Pressable style={styles.partnerRetryBtn} onPress={loadPartners}>
+              <Text style={styles.partnerRetryText}>Thử lại</Text>
+            </Pressable>
+          </View>
+        ) : partners.length === 0 ? (
+          <View style={styles.partnerEmptyCard}>
+            <Text style={styles.partnerEmptyText}>Chưa có partner nào gần bạn</Text>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            pagingEnabled
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            style={[styles.partnerPager, { width: partnerPageWidth }]}
+            onMomentumScrollEnd={(e) => {
+              const x = e.nativeEvent.contentOffset.x;
+              const page = Math.round(x / partnerPageWidth);
+              const last = partnerPages.length - 1;
+              setPartnerPageIndex(Math.min(Math.max(0, page), last));
+            }}
+          >
+            {partnerPages.map((page, pageIdx) => (
+              <View
+                key={`partner-page-${pageIdx}`}
+                style={[styles.partnerPage, { width: partnerPageWidth }]}
+              >
+                {page.map((p) => (
+                  <View key={p.id} style={styles.partnerCard}>
+                    <View style={styles.partnerCardContent}>
+                      <View style={styles.partnerAvatar}>
+                        {p.avatar ? (
+                          <Text style={styles.partnerAvatarText}>
+                            {p.name.charAt(0)}
+                          </Text>
+                        ) : (
+                          <Text style={styles.partnerAvatarText}>
+                            {p.name.charAt(0)}
+                          </Text>
+                        )}
                       </View>
-                      <View
-                        style={[styles.partnerChip, styles.partnerChipGhost]}
-                      >
-                        <Text style={styles.partnerChipGhostText}>
-                          Win rate {p.winRate}%
-                        </Text>
+                      <Text style={styles.partnerName}>{p.name}</Text>
+                      <Text style={styles.partnerMeta}>
+                        {p.sport || "Chưa chọn môn"} • {p.level || "Tất cả"}
+                      </Text>
+                      <View style={styles.partnerChipsRow}>
+                        <View style={styles.partnerChipLocation}>
+                          <Text style={styles.partnerChipText}>
+                            {p.location || "Không rõ vị trí"}
+                          </Text>
+                        </View>
+                        <View style={styles.partnerChipWin}>
+                          <Text style={styles.partnerChipWinText}>
+                            Win {p.winRate}%
+                          </Text>
+                        </View>
                       </View>
                     </View>
+                    <View style={styles.partnerDivider} />
+                    <View style={styles.partnerActionRow}>
+                      <Pressable
+                        style={styles.partnerBtnProfile}
+                        onPress={() =>
+                          router.push({ pathname: "/profile", params: { id: p.id } })
+                        }
+                      >
+                        <Text style={styles.partnerBtnProfileText}>👤 Profile</Text>
+                      </Pressable>
+                    </View>
                   </View>
-                </Pressable>
-              ))}
-            </View>
-          ))}
-        </ScrollView>
-        {partnerPages.length > 1 ? (
-          <View style={styles.partnerDots}>
-            {partnerPages.map((_, i) => (
-              <View
-                key={`partner-dot-${i}`}
-                style={[
-                  styles.partnerDot,
-                  i === partnerPageIndex && styles.partnerDotActive,
-                ]}
-              />
+                ))}
+              </View>
             ))}
-          </View>
-        ) : null}
+          </ScrollView>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -475,88 +434,181 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 4,
   },
+  partnerSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  partnerPagination: {
+    color: "#ff4d4d",
+    fontSize: 14,
+    fontWeight: "600",
+  },
   partnerPager: {
     alignSelf: "center",
   },
   partnerPage: {
-    gap: 10,
     paddingBottom: 4,
   },
-  partnerDots: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 10,
-  },
-  partnerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#444",
-  },
-  partnerDotActive: {
-    backgroundColor: "#ff4d4f",
-    width: 18,
-  },
   partnerCard: {
-    flexDirection: "row",
+    backgroundColor: "#1a1a1a",
+    borderRadius: 30,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
     alignItems: "center",
-    gap: 10,
-    backgroundColor: "#111111",
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+  },
+  partnerCardContent: {
+    alignItems: "center",
+    width: "100%",
   },
   partnerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#ff4d4f22",
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#8b451933",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 16,
   },
   partnerAvatarText: {
-    color: "#ff4d4f",
+    color: "#ff4d4d",
     fontWeight: "700",
+    fontSize: 36,
   },
   partnerMain: {
     flex: 1,
   },
   partnerName: {
     color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 6,
+    textAlign: "center",
   },
   partnerMeta: {
-    color: "#aaaaaa",
-    fontSize: 12,
+    color: "#a0a0a0",
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: "center",
   },
   partnerChipsRow: {
     flexDirection: "row",
-    gap: 6,
-    marginTop: 4,
+    gap: 10,
+    justifyContent: "center",
+    flexWrap: "wrap",
   },
-  partnerChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: "#ff4d4f",
+  partnerChipLocation: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 50,
+    backgroundColor: "#ff4d4d",
   },
   partnerChipText: {
     color: "#ffffff",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "600",
   },
-  partnerChipGhost: {
-    backgroundColor: "#181818",
+  partnerChipWin: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 50,
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#ff4d4f55",
+    borderColor: "#ff4d4d",
   },
-  partnerChipGhostText: {
-    color: "#ffb3b3",
-    fontSize: 11,
-    fontWeight: "500",
+  partnerChipWinText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  partnerDivider: {
+    width: "100%",
+    height: 1,
+    backgroundColor: "#333333",
+    marginVertical: 20,
+  },
+  partnerActionRow: {
+    flexDirection: "row",
+    width: "100%",
+    gap: 12,
+    justifyContent: "center",
+  },
+  partnerBtnSkip: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: "#ff4d4d",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  partnerBtnSkipText: {
+    color: "#ff4d4d",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  partnerBtnProfile: {
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 50,
+    backgroundColor: "#ff4d4d",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  partnerBtnProfileText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  partnerLoadingCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 30,
+    paddingVertical: 50,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  partnerLoadingText: {
+    color: "#888888",
+    fontSize: 14,
+    marginTop: 12,
+  },
+  partnerErrorCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 30,
+    paddingVertical: 30,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  partnerErrorText: {
+    color: "#ff8888",
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  partnerRetryBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: "#ff4d4d",
+  },
+  partnerRetryText: {
+    color: "#ff4d4d",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  partnerEmptyCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 30,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  partnerEmptyText: {
+    color: "#888888",
+    fontSize: 14,
+    textAlign: "center",
   },
   // Swipe card styles
   sectionSubtitle: {
