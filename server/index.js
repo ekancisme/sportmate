@@ -98,6 +98,36 @@ userSchema.set('toJSON', {
 
 const User = mongoose.model('User', userSchema);
 
+const matchSchema = new mongoose.Schema(
+  {
+    hostId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    sport: { type: String, required: true },
+    title: { type: String, required: true },
+    location: { type: String, required: true },
+    /** yyyy-mm-dd */
+    date: { type: String, required: true },
+    time: { type: String, default: '' },
+    maxPlayers: { type: Number, required: true, min: 1 },
+    minSkillLevel: { type: String, default: 'Tất Cả' },
+    description: { type: String, default: '' },
+    rules: { type: String, default: '' },
+  },
+  { timestamps: true },
+);
+
+matchSchema.set('toJSON', {
+  transform: (_document, returnedObject) => {
+    returnedObject.id = returnedObject._id.toString();
+    if (returnedObject.hostId) {
+      returnedObject.hostId = returnedObject.hostId.toString();
+    }
+    delete returnedObject._id;
+    delete returnedObject.__v;
+  },
+});
+
+const Match = mongoose.model('Match', matchSchema);
+
 /** Mã đặt lại mật khẩu (TTL tự xóa document hết hạn) */
 const passwordResetSchema = new mongoose.Schema(
   {
@@ -461,6 +491,90 @@ app.put('/api/users/:id', async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Cập nhật thông tin người dùng thất bại' });
+  }
+});
+
+// Danh sách trận (mới nhất trước)
+app.get('/api/matches', async (_req, res) => {
+  try {
+    const matches = await Match.find().sort({ createdAt: -1 }).limit(100);
+    return res.json(matches.map((m) => m.toJSON()));
+  } catch (error) {
+    console.error('❌ GET /api/matches:', error);
+    return res.status(500).json({ error: 'Không lấy được danh sách trận' });
+  }
+});
+
+// Tạo trận đấu
+app.post('/api/matches', async (req, res) => {
+  try {
+    const {
+      hostId,
+      sport,
+      title,
+      location,
+      date,
+      time,
+      maxPlayers,
+      minSkillLevel,
+      description,
+      rules,
+    } = req.body;
+
+    if (!hostId || !mongoose.Types.ObjectId.isValid(String(hostId))) {
+      return res.status(400).json({ error: 'Thiếu hoặc sai hostId (người tạo trận)' });
+    }
+
+    const host = await User.findById(hostId);
+    if (!host) {
+      return res.status(400).json({ error: 'Không tìm thấy người dùng' });
+    }
+
+    const sportTrim = String(sport || '').trim();
+    if (!sportTrim) {
+      return res.status(400).json({ error: 'Vui lòng chọn môn thể thao' });
+    }
+
+    const titleTrim = String(title || '').trim();
+    if (titleTrim.length < 2) {
+      return res.status(400).json({ error: 'Tiêu đề cần ít nhất 2 ký tự' });
+    }
+
+    const locationTrim = String(location || '').trim();
+    if (!locationTrim) {
+      return res.status(400).json({ error: 'Vui lòng nhập địa điểm' });
+    }
+
+    const dateStr = String(date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return res.status(400).json({ error: 'Ngày không hợp lệ (dùng yyyy-mm-dd)' });
+    }
+
+    const maxN = Number(maxPlayers);
+    if (!Number.isFinite(maxN) || maxN < 1 || maxN > 999) {
+      return res.status(400).json({ error: 'Số người phải từ 1 đến 999' });
+    }
+
+    const minSkillTrim = String(minSkillLevel || '').trim() || 'Tất Cả';
+
+    const match = await Match.create({
+      hostId,
+      sport: sportTrim,
+      title: titleTrim,
+      location: locationTrim,
+      date: dateStr,
+      time: String(time || '').trim(),
+      maxPlayers: Math.round(maxN),
+      minSkillLevel: minSkillTrim,
+      description: String(description || '').trim(),
+      rules: String(rules || '').trim(),
+    });
+
+    console.log(`✅ Match created: ${match.id} by host ${hostId}`);
+    return res.status(201).json(match.toJSON());
+  } catch (error) {
+    console.error('❌ POST /api/matches:', error);
+    return res.status(500).json({ error: 'Tạo trận đấu thất bại' });
   }
 });
 
