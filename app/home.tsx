@@ -1,5 +1,7 @@
-import { StyleSheet, Text, View, Pressable, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, Pressable, FlatList, Dimensions } from 'react-native';
 import { router } from 'expo-router';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type SuggestedPlayer = {
   id: string;
@@ -44,7 +46,35 @@ const SUGGESTED_PLAYERS: SuggestedPlayer[] = [
     distance: '3.1 km',
     winRate: 48,
   },
+  {
+    id: 'p4',
+    name: 'Thu Hà',
+    sport: 'Football',
+    level: 'Advanced',
+    distance: '4.0 km',
+    winRate: 82,
+  },
+  {
+    id: 'p5',
+    name: 'Nam Phạm',
+    sport: 'Basketball',
+    level: 'Intermediate',
+    distance: '1.8 km',
+    winRate: 65,
+  },
+  {
+    id: 'p6',
+    name: 'Anh Đỗ',
+    sport: 'Swimming',
+    level: 'Beginner',
+    distance: '5.2 km',
+    winRate: 55,
+  },
 ];
+
+const ITEMS_PER_PAGE = 3;
+const PARTNER_ITEM_WIDTH = (SCREEN_WIDTH - 40 - 20) / 3; // screen width - padding - gaps
+const PARTNER_PAGE_WIDTH = SCREEN_WIDTH - 40;
 
 const UPCOMING_MATCHES: UpcomingMatch[] = [
   {
@@ -124,30 +154,35 @@ export default function HomeScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Những partner tuyệt vời</Text>
-        {SUGGESTED_PLAYERS.map((p) => (
-          <Pressable
-            key={p.id}
-            style={styles.partnerCard}
-            onPress={() => router.push({ pathname: '/profile', params: { id: p.id } })}>
-            <View style={styles.partnerAvatar}>
-              <Text style={styles.partnerAvatarText}>{p.name.charAt(0)}</Text>
-            </View>
-            <View style={styles.partnerMain}>
-              <Text style={styles.partnerName}>{p.name}</Text>
-              <Text style={styles.partnerMeta}>
-                {p.sport} • {p.level}
-              </Text>
-              <View style={styles.partnerChipsRow}>
-                <View style={styles.partnerChip}>
-                  <Text style={styles.partnerChipText}>{p.distance} gần bạn</Text>
-                </View>
-                <View style={[styles.partnerChip, styles.partnerChipGhost]}>
-                  <Text style={styles.partnerChipGhostText}>Win rate {p.winRate}%</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.partnerScrollContent}>
+          {SUGGESTED_PLAYERS.map((p) => (
+            <Pressable
+              key={p.id}
+              style={styles.partnerCard}
+              onPress={() => router.push({ pathname: '/profile', params: { id: p.id } })}>
+              <View style={styles.partnerAvatar}>
+                <Text style={styles.partnerAvatarText}>{p.name.charAt(0)}</Text>
+              </View>
+              <View style={styles.partnerMain}>
+                <Text style={styles.partnerName}>{p.name}</Text>
+                <Text style={styles.partnerMeta}>
+                  {p.sport} • {p.level}
+                </Text>
+                <View style={styles.partnerChipsRow}>
+                  <View style={styles.partnerChip}>
+                    <Text style={styles.partnerChipText}>{p.distance} gần bạn</Text>
+                  </View>
+                  <View style={[styles.partnerChip, styles.partnerChipGhost]}>
+                    <Text style={styles.partnerChipGhostText}>Win rate {p.winRate}%</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          </Pressable>
-        ))}
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
       <View style={styles.section}>
@@ -298,15 +333,19 @@ const styles = StyleSheet.create({
   },
   section: {
     marginTop: 20,
-    gap: 10,
   },
   sectionTitle: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 12,
+  },
+  partnerScrollContent: {
+    gap: 10,
+    paddingRight: 20,
   },
   partnerCard: {
+    width: 200,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,

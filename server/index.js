@@ -1,8 +1,8 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const multer = require('multer');
-const path = require('path');
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const multer = require("multer");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,37 +14,39 @@ app.use(express.json());
 // Simple request logger để debug kết nối từ client
 app.use((req, _res, next) => {
   const now = new Date().toISOString();
-  console.log(`[${now}] ${req.method} ${req.url} - from ${req.ip || 'unknown'}`);
+  console.log(
+    `[${now}] ${req.method} ${req.url} - from ${req.ip || "unknown"}`,
+  );
   next();
 });
 
 // Static upload folder for avatars
-const uploadDir = path.join(__dirname, 'uploads');
+const uploadDir = path.join(__dirname, "uploads");
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (_req, file, cb) => {
     const unique = Date.now().toString(36);
-    const ext = path.extname(file.originalname || '.jpg');
+    const ext = path.extname(file.originalname || ".jpg");
     cb(null, `avatar_${unique}${ext}`);
   },
 });
 const upload = multer({ storage });
-app.use('/uploads', express.static(uploadDir));
+app.use("/uploads", express.static(uploadDir));
 
 // Kết nối MongoDB local
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://36.50.54.246:27017/sportmate';
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://36.50.54.246:27017";
 
 mongoose
   .connect(MONGODB_URI)
-  .then(() => console.log('✅ Connected to local MongoDB'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+  .then(() => console.log("✅ Connected to local MongoDB"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 // User Schema (bao gồm cả thông tin profile)
 const userSchema = new mongoose.Schema(
   {
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ['user', 'admin'], default: 'user' },
+    role: { type: String, enum: ["user", "admin"], default: "user" },
     // Profile cơ bản
     name: { type: String },
     age: { type: Number },
@@ -80,7 +82,7 @@ const userSchema = new mongoose.Schema(
 );
 
 // Chuẩn hoá output JSON: _id -> id, ẩn password & __v
-userSchema.set('toJSON', {
+userSchema.set("toJSON", {
   transform: (_document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString();
     delete returnedObject._id;
@@ -89,10 +91,10 @@ userSchema.set('toJSON', {
   },
 });
 
-const User = mongoose.model('User', userSchema);
+const User = mongoose.model("User", userSchema);
 
 // Health check
-app.get('/health', (_req, res) => {
+app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
@@ -102,35 +104,35 @@ function isValidEmail(email) {
 }
 
 // Đăng ký (tạm thời bỏ validate chặt để dễ debug)
-app.post('/api/auth/register', async (req, res) => {
+app.post("/api/auth/register", async (req, res) => {
   try {
-    const { fullName, email, phone, password, role = 'user' } = req.body;
+    const { fullName, email, phone, password, role = "user" } = req.body;
 
     // Tạm thời relax validate: tự sinh username/email nếu thiếu để tránh lỗi
-    const safeEmail = (email || '').trim();
+    const safeEmail = (email || "").trim();
     const usernameBase =
-      safeEmail || (fullName || '').trim() || `user_${Date.now().toString(36)}`;
-    const username = usernameBase.toLowerCase().replace(/\s+/g, '');
+      safeEmail || (fullName || "").trim() || `user_${Date.now().toString(36)}`;
+    const username = usernameBase.toLowerCase().replace(/\s+/g, "");
 
     const user = new User({
       username,
       name: fullName || usernameBase,
       email: safeEmail || `${username}@example.com`,
-      phone: phone || '',
-      password: password || '',
+      phone: phone || "",
+      password: password || "",
       role,
     });
     const savedUser = await user.save();
     console.log(`✅ Registered new user: ${savedUser.id} (${savedUser.email})`);
     return res.json(savedUser.toJSON());
   } catch (error) {
-    console.error('❌ Register error:', error);
-    return res.status(500).json({ error: 'Đăng ký thất bại' });
+    console.error("❌ Register error:", error);
+    return res.status(500).json({ error: "Đăng ký thất bại" });
   }
 });
 
 // Đăng nhập
-app.post('/api/auth/login', async (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
@@ -139,22 +141,22 @@ app.post('/api/auth/login', async (req, res) => {
     });
     if (!user || user.password !== password) {
       console.warn(`⚠️ Failed login for identifier="${identifier}"`);
-      return res.status(401).json({ error: 'Sai thông tin đăng nhập' });
+      return res.status(401).json({ error: "Sai thông tin đăng nhập" });
     }
 
     console.log(`✅ Login success: ${user.id} (${user.email})`);
     return res.json(user.toJSON());
   } catch (error) {
-    console.error('❌ Login error:', error);
-    return res.status(500).json({ error: 'Đăng nhập thất bại' });
+    console.error("❌ Login error:", error);
+    return res.status(500).json({ error: "Đăng nhập thất bại" });
   }
 });
 
 // Upload avatar và cập nhật user.avatar
-app.post('/api/users/:id/avatar', upload.single('avatar'), async (req, res) => {
+app.post("/api/users/:id/avatar", upload.single("avatar"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return res.status(400).json({ error: "No file uploaded" });
     }
 
     const avatarUrl = `/uploads/${req.file.filename}`;
@@ -166,44 +168,44 @@ app.post('/api/users/:id/avatar', upload.single('avatar'), async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({ error: 'Không tìm thấy người dùng' });
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
     }
 
     return res.json(user.toJSON());
   } catch (error) {
-    console.error('Avatar upload error:', error);
-    return res.status(500).json({ error: 'Upload avatar thất bại' });
+    console.error("Avatar upload error:", error);
+    return res.status(500).json({ error: "Upload avatar thất bại" });
   }
 });
 
 // Lấy profile theo id
-app.get('/api/users/:id', async (req, res) => {
+app.get("/api/users/:id", async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ error: 'Không tìm thấy người dùng' });
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
     }
     return res.json(user.toJSON());
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: 'Lấy thông tin người dùng thất bại' });
+    return res.status(500).json({ error: "Lấy thông tin người dùng thất bại" });
   }
 });
 
 // Cập nhật profile (không đổi password ở đây)
-app.put('/api/users/:id', async (req, res) => {
+app.put("/api/users/:id", async (req, res) => {
   try {
     const allowedFields = [
-      'name',
-      'age',
-      'location',
-      'bio',
-      'email',
-      'phone',
-      'avatar',
-      'stats',
-      'sports',
-      'schedule',
+      "name",
+      "age",
+      "location",
+      "bio",
+      "email",
+      "phone",
+      "avatar",
+      "stats",
+      "sports",
+      "schedule",
     ];
 
     const update = {};
@@ -213,20 +215,23 @@ app.put('/api/users/:id', async (req, res) => {
       }
     });
 
-    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true });
+    const user = await User.findByIdAndUpdate(req.params.id, update, {
+      new: true,
+    });
     if (!user) {
-      return res.status(404).json({ error: 'Không tìm thấy người dùng' });
+      return res.status(404).json({ error: "Không tìm thấy người dùng" });
     }
 
     return res.json(user.toJSON());
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: 'Cập nhật thông tin người dùng thất bại' });
+    return res
+      .status(500)
+      .json({ error: "Cập nhật thông tin người dùng thất bại" });
   }
 });
 
 // Khởi chạy server API
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server is running on http://0.0.0.0:${PORT}`);
 });
-
