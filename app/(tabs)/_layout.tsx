@@ -18,8 +18,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: '',
-          headerShown: false,
+          title: 'Trang chủ',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),
@@ -28,8 +27,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="ranking"
         options={{
-          title: '',
-          headerShown: false,
+          title: 'Bảng xếp hạng',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trophy-outline" size={size} color={color} />
           ),
@@ -38,8 +36,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="my-profile"
         options={{
-          title: '',
-          headerShown: false,
+          title: 'Hồ sơ',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-circle-outline" size={size} color={color} />
           ),

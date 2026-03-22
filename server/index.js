@@ -228,11 +228,9 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(400).json({ error: "Email không hợp lệ" });
     }
     if (!password || String(password).length < MIN_PASSWORD_LENGTH) {
-      return res
-        .status(400)
-        .json({
-          error: `Mật khẩu phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự`,
-        });
+      return res.status(400).json({
+        error: `Mật khẩu phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự`,
+      });
     }
     if (phoneTrim && !/^[\d\s\-\+\(\)]+$/.test(phoneTrim)) {
       return res.status(400).json({ error: "Số điện thoại không hợp lệ" });
@@ -388,11 +386,9 @@ app.post("/api/auth/reset-password", async (req, res) => {
       return res.status(400).json({ error: "Mã phải gồm 6 chữ số" });
     }
     if (!newPassword || String(newPassword).length < MIN_PASSWORD_LENGTH) {
-      return res
-        .status(400)
-        .json({
-          error: `Mật khẩu mới phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự`,
-        });
+      return res.status(400).json({
+        error: `Mật khẩu mới phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự`,
+      });
     }
 
     const record = await PasswordReset.findOne({ email }).sort({
@@ -468,94 +464,6 @@ app.get("/api/users/:id", async (req, res) => {
   }
 });
 
-// Lấy danh sách users để gợi ý partner
-app.get("/api/users", async (req, res) => {
-  try {
-    const { exclude, sport, limit = 20, location: userLocation } = req.query;
-
-    const filter = { role: "user" };
-
-    // Loại trừ user hiện tại
-    if (exclude) {
-      filter._id = { $ne: exclude };
-    }
-
-    // Lọc theo sport nếu có
-    if (sport) {
-      filter["sports.name"] = { $regex: sport, $options: "i" };
-    }
-
-    const users = await User.find(filter)
-      .select("name username avatar stats sports location")
-      .limit(Number(limit) * 2)
-      .sort({ createdAt: -1 });
-
-    // Normalize location text
-    const normalizeLoc = (loc) => {
-      if (!loc) return "";
-      return loc.toLowerCase().replace(/\s+/g, " ").trim();
-    };
-
-    // Tính độ ưu tiên location
-    const getLocationScore = (userLoc) => {
-      if (!userLoc || !userLocation) return 0;
-      const normalized = normalizeLoc(userLoc);
-      const userNorm = normalizeLoc(userLocation);
-
-      // Trùng khớp hoàn toàn
-      if (normalized === userNorm) return 100;
-      // Có chứa nhau
-      if (normalized.includes(userNorm) || userNorm.includes(normalized)) return 80;
-      // Cùng thành phố (lấy 2 từ cuối)
-      const userWords = userNorm.split(" ");
-      const locWords = normalized.split(" ");
-      const userLast2 = userWords.slice(-2).join(" ");
-      const locLast2 = locWords.slice(-2).join(" ");
-      if (locLast2 === userLast2 && userLast2.length > 3) return 60;
-      // Cùng 1 từ quan trọng (TP, HCM, HN, quận...)
-      const keywords = ["hồ chí minh", "hà nội", "hcm", "hn", "đà nẵng", "quận", "huyện", "tp"];
-      for (const kw of keywords) {
-        if (userNorm.includes(kw) && normalized.includes(kw)) return 40;
-      }
-      return 10;
-    };
-
-    // Transform data thành format partner
-    let partners = users.map((user) => {
-      const primarySport = user.sports?.[0];
-      const locationScore = getLocationScore(user.location);
-      console.log(`[Partner] ${user.username} - avatar:`, user.avatar);
-      return {
-        id: user._id.toString(),
-        name: user.name || user.username || "User",
-        sport: primarySport?.name || "Thể thao",
-        level: primarySport?.level || "Intermediate",
-        distance: user.location || "Không xác định",
-        locationScore,
-        winRate: user.stats?.winRate || Math.floor(Math.random() * 40) + 40,
-        avatar: user.avatar || null,
-        location: user.location || null,
-      };
-    });
-
-    // Sắp xếp: ưu tiên location gần nhất, sau đó theo winRate
-    partners = partners.sort((a, b) => {
-      if (b.locationScore !== a.locationScore) {
-        return b.locationScore - a.locationScore;
-      }
-      return b.winRate - a.winRate;
-    });
-
-    // Giới hạn kết quả
-    partners = partners.slice(0, Number(limit));
-
-    return res.json(partners);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Lấy danh sách users thất bại" });
-  }
-});
-
 app.put("/api/users/:id", async (req, res) => {
   try {
     const allowedFields = [
@@ -594,35 +502,130 @@ app.put("/api/users/:id", async (req, res) => {
   }
 });
 
-// Lấy thông tin user riêng biệt (dùng cho public profile)
-app.get("/api/users/:id", async (req, res) => {
+// Lấy danh sách partner gợi ý với bộ lọc location
+app.get("/api/partners/suggested", async (req, res) => {
   try {
-    const user = await User.findById(req.params.id)
-      .select("name username avatar age location bio stats sports schedule");
+    const currentUserId = req.query.userId;
+    const maxDistance = parseInt(req.query.maxDistance) || 10; // km, mặc định 10km
+    const limit = parseInt(req.query.limit) || 10;
 
-    if (!user) {
-      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+    // Lấy thông tin user hiện tại để biết location
+    let userLocation = null;
+    if (currentUserId) {
+      const currentUser = await User.findById(currentUserId);
+      if (currentUser && currentUser.location) {
+        userLocation = currentUser.location.toLowerCase();
+      }
     }
 
+    // Tạo query lọc
+    const query = { role: "user" };
+
+    // Loại trừ user hiện tại
+    if (currentUserId) {
+      query._id = { $ne: new mongoose.Types.ObjectId(currentUserId) };
+    }
+
+    // Lấy tất cả users phù hợp
+    let users = await User.find(query)
+      .select("name age location bio avatar stats sports")
+      .limit(100);
+
+    // Nếu có location của user hiện tại, lọc và sắp xếp theo độ gần
+    if (userLocation) {
+      users = users
+        .map((user) => {
+          const userLoc = (user.location || "").toLowerCase();
+          let distance = null;
+
+          // Tính khoảng cách đơn giản bằng cách so khớp location
+          // Nếu cùng quận/tp thì coi như gần
+          const currentParts = userLocation.split(/[,\s]+/).filter(Boolean);
+          const userParts = userLoc.split(/[,\s]+/).filter(Boolean);
+
+          // Kiểm tra các từ khóa location trùng nhau
+          const commonWords = currentParts.filter((word) =>
+            userParts.some(
+              (p) =>
+                p.includes(word) ||
+                word.includes(p) ||
+                p.toLowerCase().includes(word.toLowerCase())
+            )
+          );
+
+          if (commonWords.length > 0) {
+            // Càng nhiều từ trùng = càng gần
+            distance = commonWords.length >= 2 ? 1 : 3;
+          } else if (userLoc.includes("tp.hcm") || userLoc.includes("hồ chí minh")) {
+            if (
+              userLocation.includes("tp.hcm") ||
+              userLocation.includes("hồ chí minh")
+            ) {
+              distance = 5; // Cùng TP nhưng khác quận
+            } else {
+              distance = 8; // Khác TP
+            }
+          } else {
+            distance = maxDistance; // Không xác định được
+          }
+
+          return { ...user.toObject(), distance };
+        })
+        .filter((user) => user.distance <= maxDistance)
+        .sort((a, b) => a.distance - b.distance);
+    } else {
+      // Không có location -> sắp xếp ngẫu nhiên
+      users = users
+        .map((user) => ({ ...user.toObject(), distance: null }))
+        .sort(() => Math.random() - 0.5);
+    }
+
+    // Giới hạn kết quả
+    const result = users.slice(0, limit);
+
+    // Chuyển đổi format response
+    const partners = result.map((u) => ({
+      id: u._id.toString(),
+      name: u.name || u.username,
+      age: u.age,
+      location: u.location,
+      bio: u.bio,
+      avatar: u.avatar,
+      distance: u.distance,
+      winRate: u.stats?.winRate || 0,
+      sport: u.sports?.[0]?.name || "Chưa cập nhật",
+      level: u.sports?.[0]?.level || "Chưa cập nhật",
+    }));
+
     return res.json({
-      id: user._id.toString(),
-      name: user.name || user.username || "User",
-      age: user.age || null,
-      location: user.location || "Không xác định",
-      bio: user.bio || "",
-      avatar: user.avatar || null,
-      stats: {
-        matchesPlayed: user.stats?.matchesPlayed || 0,
-        winRate: user.stats?.winRate || 0,
-        hoursActive: user.stats?.hoursActive || 0,
-        followers: user.stats?.followers || 0,
-      },
-      sports: user.sports || [],
-      schedule: user.schedule || [],
+      partners,
+      total: partners.length,
+      userLocation: userLocation,
     });
   } catch (error) {
+    console.error("Error fetching suggested partners:", error);
+    return res.status(500).json({ error: "Lấy danh sách partner thất bại" });
+  }
+});
+
+// Lấy tất cả users (cho admin hoặc debug)
+app.get("/api/users", async (req, res) => {
+  try {
+    const { sport, level, location, limit = 50 } = req.query;
+
+    const query = { role: "user" };
+    if (sport) query["sports.name"] = sport;
+    if (level) query["sports.level"] = level;
+    if (location) query.location = { $regex: location, $options: "i" };
+
+    const users = await User.find(query)
+      .select("-password")
+      .limit(parseInt(limit));
+
+    return res.json(users);
+  } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: "Lấy thông tin người dùng thất bại" });
+    return res.status(500).json({ error: "Lấy danh sách người dùng thất bại" });
   }
 });
 

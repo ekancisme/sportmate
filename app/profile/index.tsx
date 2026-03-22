@@ -1,15 +1,6 @@
-import Constants from "expo-constants";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type UserSport = {
   name: string;
@@ -32,87 +23,79 @@ type UserStats = {
 type UserProfile = {
   id: string;
   name: string;
-  age: number | null;
+  age: number;
   location: string;
   bio: string;
-  avatar: string | null;
+  email: string;
+  avatar: string;
   stats: UserStats;
   sports: UserSport[];
   schedule: UserScheduleItem[];
 };
 
-function getApiBaseUrl() {
-  const envUrl = process.env.EXPO_PUBLIC_API_URL as string | undefined;
-  if (envUrl) return envUrl;
-
-  const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.hostUri;
-
-  if (hostUri) {
-    const host = hostUri.split(":")[0];
-    return `http://${host}:3000`;
-  }
-
-  return "http://localhost:3000";
-}
-
-const API_BASE_URL = getApiBaseUrl();
+const MOCK_PUBLIC_USERS: UserProfile[] = [
+  {
+    id: 'p1',
+    name: 'Minh Trần',
+    age: 25,
+    location: 'Quận 1, TP.HCM',
+    bio: 'Tiền vệ trung tâm, ưu tiên các trận giao hữu vui vẻ nhưng quyết liệt.',
+    email: 'minh.tran@example.com',
+    avatar: '',
+    stats: { matchesPlayed: 64, winRate: 61, hoursActive: 180, followers: 54 },
+    sports: [{ name: 'Football', level: 'Intermediate' }],
+    schedule: [
+      { day: 'Thứ 2', time: '19:00', activity: 'Đá bóng 7 người' },
+      { day: 'Thứ 6', time: '20:00', activity: 'Giao hữu nội bộ' },
+    ],
+  },
+  {
+    id: 'p2',
+    name: 'Lan Nguyễn',
+    age: 23,
+    location: 'Quận 3, TP.HCM',
+    bio: 'Cầu lông trình độ cao, thích tham gia các kèo đôi nam nữ.',
+    email: 'lan.nguyen@example.com',
+    avatar: '',
+    stats: { matchesPlayed: 88, winRate: 74, hoursActive: 220, followers: 132 },
+    sports: [
+      { name: 'Badminton', level: 'Advanced' },
+      { name: 'Tennis', level: 'Intermediate' },
+    ],
+    schedule: [
+      { day: 'Thứ 4', time: '19:30', activity: 'Cầu lông' },
+      { day: 'Chủ nhật', time: '09:00', activity: 'Tennis' },
+    ],
+  },
+  {
+    id: 'p3',
+    name: 'Hoàng Lê',
+    age: 21,
+    location: 'Quận 7, TP.HCM',
+    bio: 'Mới bắt đầu chơi tennis và bóng rổ, muốn tìm bạn tập cùng.',
+    email: 'hoang.le@example.com',
+    avatar: '',
+    stats: { matchesPlayed: 24, winRate: 48, hoursActive: 60, followers: 18 },
+    sports: [
+      { name: 'Tennis', level: 'Beginner' },
+      { name: 'Basketball', level: 'Beginner' },
+    ],
+    schedule: [
+      { day: 'Thứ 3', time: '18:00', activity: 'Tennis' },
+      { day: 'Thứ 7', time: '17:00', activity: 'Bóng rổ' },
+    ],
+  },
+];
 
 export default function PublicProfilePage() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const [favorited, setFavorited] = useState(false);
   const [following, setFollowing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<UserProfile | null>(null);
 
-  useEffect(() => {
-    if (!params.id) {
-      setError("Không có ID người dùng");
-      setLoading(false);
-      return;
-    }
-
-    async function fetchUser() {
-      try {
-        setLoading(true);
-        const res = await fetch(`${API_BASE_URL}/api/users/${params.id}`);
-        if (!res.ok) {
-          throw new Error("Không tìm thấy người dùng");
-        }
-        const data = await res.json();
-        setUser(data);
-      } catch (err: any) {
-        setError(err.message || "Lỗi khi tải thông tin");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchUser();
-  }, [params.id]);
-
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#ff4d4f" />
-        <Text style={styles.loadingText}>Đang tải...</Text>
-      </View>
-    );
-  }
-
-  if (error || !user) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.errorText}>
-          {error || "Không tìm thấy người dùng"}
-        </Text>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>Quay lại</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  const user =
+    MOCK_PUBLIC_USERS.find((u) => u.id === params.id) ??
+    MOCK_PUBLIC_USERS[1]; // default user
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -126,20 +109,13 @@ export default function PublicProfilePage() {
 
       <View style={styles.profileCard}>
         <View style={styles.avatarCircle}>
-          {user.avatar ? (
-            <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
-          ) : (
-            <Text style={styles.avatarInitial}>
-              {user.name?.charAt(0) || "?"}
-            </Text>
-          )}
+          <Text style={styles.avatarInitial}>{user.name.charAt(0)}</Text>
         </View>
         <Text style={styles.name}>{user.name}</Text>
         <Text style={styles.meta}>
-          {user.age ? `${user.age} tuổi • ` : ""}
-          {user.location}
+          {user.age} tuổi • {user.location}
         </Text>
-        {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
+        <Text style={styles.bio}>{user.bio}</Text>
       </View>
 
       <View style={styles.actionsRow}>
@@ -147,37 +123,17 @@ export default function PublicProfilePage() {
           <Text style={styles.actionPrimaryText}>Nhắn tin</Text>
         </Pressable>
         <Pressable
-          style={[
-            styles.actionBtn,
-            favorited ? styles.actionSecondaryActive : styles.actionSecondary,
-          ]}
-          onPress={() => setFavorited((v) => !v)}
-        >
-          <Text
-            style={
-              favorited
-                ? styles.actionSecondaryTextActive
-                : styles.actionSecondaryText
-            }
-          >
-            {favorited ? "Đã yêu thích" : "Yêu thích"}
+          style={[styles.actionBtn, favorited ? styles.actionSecondaryActive : styles.actionSecondary]}
+          onPress={() => setFavorited((v) => !v)}>
+          <Text style={favorited ? styles.actionSecondaryTextActive : styles.actionSecondaryText}>
+            {favorited ? 'Đã yêu thích' : 'Yêu thích'}
           </Text>
         </Pressable>
         <Pressable
-          style={[
-            styles.actionBtn,
-            following ? styles.actionSecondaryActive : styles.actionSecondary,
-          ]}
-          onPress={() => setFollowing((v) => !v)}
-        >
-          <Text
-            style={
-              following
-                ? styles.actionSecondaryTextActive
-                : styles.actionSecondaryText
-            }
-          >
-            {following ? "Đang follow" : "Follow"}
+          style={[styles.actionBtn, following ? styles.actionSecondaryActive : styles.actionSecondary]}
+          onPress={() => setFollowing((v) => !v)}>
+          <Text style={following ? styles.actionSecondaryTextActive : styles.actionSecondaryText}>
+            {following ? 'Đang follow' : 'Follow'}
           </Text>
         </Pressable>
       </View>
@@ -194,27 +150,23 @@ export default function PublicProfilePage() {
         </View>
       </View>
 
-      {user.sports && user.sports.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Môn thể thao</Text>
-          {user.sports.map((s, idx) => (
-            <Text key={`${s.name}-${idx}`} style={styles.listItem}>
-              • {s.name} ({s.level})
-            </Text>
-          ))}
-        </View>
-      )}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Môn thể thao</Text>
+        {user.sports.map((s, idx) => (
+          <Text key={`${s.name}-${idx}`} style={styles.listItem}>
+            • {s.name} ({s.level})
+          </Text>
+        ))}
+      </View>
 
-      {user.schedule && user.schedule.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Lịch tập luyện</Text>
-          {user.schedule.map((s, idx) => (
-            <Text key={`${s.day}-${idx}`} style={styles.listItem}>
-              • {s.day} • {s.time} • {s.activity}
-            </Text>
-          ))}
-        </View>
-      )}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Lịch tập luyện</Text>
+        {user.schedule.map((s, idx) => (
+          <Text key={`${s.day}-${idx}`} style={styles.listItem}>
+            • {s.day} • {s.time} • {s.activity}
+          </Text>
+        ))}
+      </View>
     </ScrollView>
   );
 }
@@ -231,112 +183,82 @@ function Stat({ label, value }: { label: string; value: number }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#050505",
-  },
-  centered: {
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#050505',
   },
   content: {
     paddingHorizontal: 16,
     paddingTop: 32,
     paddingBottom: 120,
   },
-  loadingText: {
-    color: "#aaa",
-    marginTop: 12,
-    fontSize: 14,
-  },
-  errorText: {
-    color: "#ff4d4f",
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  backBtn: {
-    backgroundColor: "#ff4d4f",
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  backBtnText: {
-    color: "#fff",
-    fontWeight: "600",
-  },
   headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
   headerBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#111",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: '#111',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerBtnPlaceholder: {
     width: 34,
     height: 34,
   },
   headerBtnText: {
-    color: "#aaa",
+    color: '#aaa',
     fontSize: 16,
   },
   headerTitle: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   profileCard: {
-    alignItems: "center",
+    alignItems: 'center',
     paddingVertical: 20,
     marginBottom: 20,
     borderRadius: 24,
-    backgroundColor: "#101010",
+    backgroundColor: '#101010',
   },
   avatarCircle: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: '#1a1a1a',
     borderWidth: 2,
-    borderColor: "#ff4d4f55",
-    alignItems: "center",
-    justifyContent: "center",
+    borderColor: '#ff4d4f55',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 8,
-    overflow: "hidden",
-  },
-  avatarImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
   },
   avatarInitial: {
-    color: "#ffffff",
+    color: '#ffffff',
     fontSize: 26,
-    fontWeight: "700",
+    fontWeight: '700',
   },
   name: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   meta: {
-    color: "#aaa",
+    color: '#aaa',
     fontSize: 13,
     marginTop: 2,
   },
   bio: {
-    color: "#ddd",
+    color: '#ddd',
     fontSize: 13,
     marginTop: 8,
-    textAlign: "center",
+    textAlign: 'center',
     paddingHorizontal: 12,
   },
   actionsRow: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 8,
     marginBottom: 20,
   },
@@ -344,69 +266,68 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 999,
     paddingVertical: 8,
-    alignItems: "center",
+    alignItems: 'center',
   },
   actionPrimary: {
-    backgroundColor: "#ff4d4f",
+    backgroundColor: '#ff4d4f',
   },
   actionPrimaryText: {
-    color: "#fff",
-    fontWeight: "600",
+    color: '#fff',
+    fontWeight: '600',
     fontSize: 13,
   },
   actionSecondary: {
     borderWidth: 1,
-    borderColor: "#444",
+    borderColor: '#444',
   },
   actionSecondaryActive: {
     borderWidth: 1,
-    borderColor: "#ff4d4f",
-    backgroundColor: "#111",
+    borderColor: '#ff4d4f',
+    backgroundColor: '#111',
   },
   actionSecondaryText: {
-    color: "#ccc",
+    color: '#ccc',
     fontSize: 12,
   },
   actionSecondaryTextActive: {
-    color: "#ff4d4f",
+    color: '#ff4d4f',
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   section: {
     marginBottom: 20,
   },
   sectionTitle: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: 10,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   statsRow: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 10,
-    marginBottom: 8,
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#101010",
-    borderRadius: 12,
-    padding: 12,
-    alignItems: "center",
+    backgroundColor: '#111',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   statLabel: {
-    color: "#888",
-    fontSize: 11,
+    color: '#aaa',
+    fontSize: 12,
+    marginBottom: 4,
   },
   statValue: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 18,
-    fontWeight: "700",
-    marginTop: 2,
+    fontWeight: '700',
   },
   listItem: {
-    color: "#ccc",
+    color: '#ddd',
     fontSize: 13,
-    marginBottom: 6,
     lineHeight: 18,
   },
 });
+
