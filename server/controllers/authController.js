@@ -76,6 +76,9 @@ async function login(req, res) {
       console.warn(`⚠️ Failed login for "${identifier}"`);
       return res.status(401).json({ error: 'Sai email/tên đăng nhập hoặc mật khẩu' });
     }
+    if (user.isBanned) {
+      return res.status(403).json({ error: 'Tài khoản đã bị khóa bởi quản trị viên' });
+    }
 
     console.log(`✅ Login: ${user.id} (${user.email})`);
     return res.json(user.toJSON());
