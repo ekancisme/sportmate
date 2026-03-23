@@ -24,7 +24,13 @@ function matchJsonWithHost(doc, options = {}) {
     Array.isArray(pids)
   ) {
     const v = new mongoose.Types.ObjectId(String(viewerUserId));
-    viewerJoined = pids.some((p) => p.equals(v));
+    viewerJoined = pids.some((p) => {
+      if (!p) return false;
+      // Khi populate('participantIds'), p có thể là document user.
+      if (typeof p === 'object' && p._id) return String(p._id) === String(v);
+      if (typeof p === 'object' && p.equals) return p.equals(v);
+      return String(p) === String(viewerUserId);
+    });
   }
 
   let host = null;
@@ -39,9 +45,44 @@ function matchJsonWithHost(doc, options = {}) {
       winRate: h.stats?.winRate ?? 50,
     };
   }
+
+  const participants = Array.isArray(doc.participantIds)
+    ? doc.participantIds.map((u) => {
+        if (!u) return null;
+        if (typeof u === 'object' && u._id) {
+          const uj = typeof u.toJSON === 'function' ? u.toJSON() : u;
+          return {
+            id: uj.id ?? String(uj._id),
+            name: uj.name || uj.username,
+            username: uj.username,
+            avatar: uj.avatar,
+          };
+        }
+        return { id: u.toString() };
+      }).filter(Boolean)
+    : [];
+
+  const winners = Array.isArray(doc.winners)
+    ? doc.winners.map((w) => {
+        if (!w) return null;
+        if (typeof w === 'object' && w._id) return w._id.toString();
+        if (typeof w === 'object' && w.toString) return w.toString();
+        return null;
+      }).filter(Boolean)
+    : [];
+
   delete j.hostId;
   delete j.participantIds;
-  return { ...j, host, hostId: hostIdStr, currentPlayers: cp, viewerJoined };
+  delete j.winners;
+  return {
+    ...j,
+    host,
+    hostId: hostIdStr,
+    currentPlayers: cp,
+    viewerJoined,
+    participants,
+    winners,
+  };
 }
 
 module.exports = {

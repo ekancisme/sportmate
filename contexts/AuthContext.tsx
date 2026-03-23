@@ -24,6 +24,19 @@ export type AuthUser = {
   schedule?: { day: string; time?: string; activity: string }[];
 };
 
+export type SuggestedPartner = {
+  id: string;
+  name: string;
+  sport: string;
+  level: string;
+  distance: string | null;
+  winRate: number;
+  bio?: string;
+  age?: number;
+  location?: string;
+  avatar?: string;
+};
+
 type AuthContextValue = {
   user: AuthUser | null;
   role: Role;
@@ -49,6 +62,11 @@ type AuthContextValue = {
   }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   setUserFromServer: (user: AuthUser) => void;
+  /** Lấy danh sách partner gợi ý theo location */
+  fetchSuggestedPartners: (options?: {
+    maxDistance?: number;
+    limit?: number;
+  }) => Promise<{ partners: SuggestedPartner[]; total: number; userLocation: string | null }>;
 };
 
 function getApiBaseUrl() {
@@ -172,6 +190,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const fetchSuggestedPartners: AuthContextValue["fetchSuggestedPartners"] = async ({
+    maxDistance = 10,
+    limit = 10,
+  } = {}) => {
+    try {
+      const params = new URLSearchParams({
+        maxDistance: String(maxDistance),
+        limit: String(limit),
+      });
+
+      if (user?.id) {
+        params.append("userId", user.id);
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/partners/suggested?${params}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Fetch partners error:", data?.error);
+        return { partners: [], total: 0, userLocation: null };
+      }
+
+      return {
+        partners: data.partners || [],
+        total: data.total || 0,
+        userLocation: data.userLocation,
+      };
+    } catch (error) {
+      console.error("Failed to fetch suggested partners:", error);
+      return { partners: [], total: 0, userLocation: null };
+    }
+  };
+
   const value: AuthContextValue = {
     user,
     role: (user?.role as Role) || 'user',
@@ -183,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetPassword,
     logout,
     setUserFromServer,
+    fetchSuggestedPartners,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
