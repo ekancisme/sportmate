@@ -1,10 +1,11 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ['user', 'owner', 'admin'], default: 'user' },
+    role: { type: String, enum: ["user", "owner", "admin"], default: "user" },
+    isBanned: { type: Boolean, default: false },
     name: { type: String },
     age: { type: Number },
     location: { type: String },
@@ -30,13 +31,19 @@ const userSchema = new mongoose.Schema(
         day: { type: String, required: true },
         time: { type: String },
         activity: { type: String, required: true },
+        /** ID trận đấu liên kết (nếu có) — dùng để xóa khi hủy tham gia */
+        matchId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Match",
+          default: null,
+        },
       },
     ],
   },
   { timestamps: true },
 );
 
-userSchema.set('toJSON', {
+userSchema.set("toJSON", {
   transform: (_document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString();
     delete returnedObject._id;
@@ -45,4 +52,4 @@ userSchema.set('toJSON', {
   },
 });
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model("User", userSchema);

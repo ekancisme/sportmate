@@ -21,6 +21,8 @@ import {
 } from "@/lib/matchApi";
 import { resolveAvatarUrl } from "@/lib/userApi";
 import { requestCurrentLocation } from "@/lib/locationUtils";
+import { computeDisplayStatus } from "@/lib/matchStatus";
+import { StatusBadge } from "@/components/StatusBadge";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -407,6 +409,9 @@ export default function HomeScreen() {
                     <Text style={styles.matchTitle} numberOfLines={1}>
                       {m.title}
                     </Text>
+                    <View style={{ marginBottom: 6 }}>
+                      <StatusBadge status={computeDisplayStatus(m.status ?? 'active', m.date, m.time)} size="sm" />
+                    </View>
                     <View style={styles.matchMetaRow}>
                       <Text style={styles.matchMetaIcon}>📍</Text>
                       <Text style={styles.matchMetaText} numberOfLines={1}>
