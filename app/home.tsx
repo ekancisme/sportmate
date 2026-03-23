@@ -14,13 +14,10 @@ import {
 } from "react-native";
 
 import { useAuth, type SuggestedPartner } from "@/contexts/AuthContext";
-import {
-  fetchMatches,
-  formatDateVi,
-  type ApiMatch,
-} from "@/lib/matchApi";
-import { resolveAvatarUrl } from "@/lib/userApi";
 import { requestCurrentLocation } from "@/lib/locationUtils";
+import { fetchMatches, formatDateVi, type ApiMatch } from "@/lib/matchApi";
+import { getApiBaseUrl } from "@/lib/apiBase";
+import { resolveAvatarUrl } from "@/lib/userApi";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -52,8 +49,8 @@ const SPORT_EMOJI: Record<string, string> = {
 };
 
 function getSportEmoji(sport: string): string {
-  const key = Object.keys(SPORT_EMOJI).find(
-    (k) => sport.toLowerCase().includes(k.toLowerCase()),
+  const key = Object.keys(SPORT_EMOJI).find((k) =>
+    sport.toLowerCase().includes(k.toLowerCase()),
   );
   return key ? SPORT_EMOJI[key] : SPORT_EMOJI.default;
 }
@@ -86,19 +83,43 @@ export default function HomeScreen() {
   const requestLocation = useCallback(async () => {
     const location = await requestCurrentLocation();
     if (location) {
-      setCurrentLocation({
+      const newLoc = {
         address: location.address,
         latitude: location.latitude,
         longitude: location.longitude,
-      });
+      };
+      setCurrentLocation(newLoc);
+
+      // Auto-save GPS + address to DB for current user
+      if (user?.id) {
+        try {
+          const apiBase = getApiBaseUrl();
+          await fetch(`${apiBase}/api/users/${user.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              latitude: location.latitude,
+              longitude: location.longitude,
+              location: location.address || "",
+            }),
+          });
+        } catch {
+          // silent fail - don't block the UI
+        }
+      }
     }
-  }, []);
+  }, [user?.id]);
 
   const loadPartners = useCallback(async () => {
     setPartnersLoading(true);
     setPartnersError(null);
     try {
-      const result = await fetchSuggestedPartners({ limit: 20 });
+      const result = await fetchSuggestedPartners({
+        limit: 20,
+        latitude: currentLocation?.latitude,
+        longitude: currentLocation?.longitude,
+        userLocation: currentLocation?.address,
+      });
       setPartners(result.partners);
     } catch (e) {
       setPartnersError(
@@ -108,7 +129,7 @@ export default function HomeScreen() {
     } finally {
       setPartnersLoading(false);
     }
-  }, [fetchSuggestedPartners, user?.id, currentLocation?.address]);
+  }, [fetchSuggestedPartners, user?.id, currentLocation]);
 
   const loadMatches = useCallback(async () => {
     setMatchesLoading(true);
@@ -372,7 +393,8 @@ export default function HomeScreen() {
               const max = Number(m.maxPlayers);
               const pct = max > 0 ? Math.min(1, cur / max) : 0;
               const hostAvatar = resolveAvatarUrl(m.host?.avatar);
-              const hostName = m.host?.name || m.host?.username || "Người tổ chức";
+              const hostName =
+                m.host?.name || m.host?.username || "Người tổ chức";
               return (
                 <Pressable
                   key={m.id}

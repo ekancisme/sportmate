@@ -8,6 +8,8 @@ const userSchema = new mongoose.Schema(
     name: { type: String },
     age: { type: Number },
     location: { type: String },
+    latitude: { type: Number },
+    longitude: { type: Number },
     bio: { type: String },
     email: { type: String, required: true, unique: true },
     phone: { type: String },
