@@ -1,100 +1,89 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-type UserSport = {
-  name: string;
-  level: string;
-};
+import { fetchUserById, type ApiUser } from "@/lib/userApi";
 
-type UserScheduleItem = {
-  day: string;
-  time: string;
-  activity: string;
-};
-
-type UserStats = {
-  matchesPlayed: number;
-  winRate: number;
-  hoursActive: number;
-  followers: number;
-};
-
-type UserProfile = {
-  id: string;
-  name: string;
-  age: number;
-  location: string;
-  bio: string;
-  email: string;
-  avatar: string;
-  stats: UserStats;
-  sports: UserSport[];
-  schedule: UserScheduleItem[];
-};
-
-const MOCK_PUBLIC_USERS: UserProfile[] = [
-  {
-    id: "p1",
-    name: "Minh Trần",
-    age: 25,
-    location: "Quận 1, TP.HCM",
-    bio: "Tiền vệ trung tâm, ưu tiên các trận giao hữu vui vẻ nhưng quyết liệt.",
-    email: "minh.tran@example.com",
-    avatar: "",
-    stats: { matchesPlayed: 64, winRate: 61, hoursActive: 180, followers: 54 },
-    sports: [{ name: "Football", level: "Intermediate" }],
-    schedule: [
-      { day: "Thứ 2", time: "19:00", activity: "Đá bóng 7 người" },
-      { day: "Thứ 6", time: "20:00", activity: "Giao hữu nội bộ" },
-    ],
-  },
-  {
-    id: "p2",
-    name: "Lan Nguyễn",
-    age: 23,
-    location: "Quận 3, TP.HCM",
-    bio: "Cầu lông trình độ cao, thích tham gia các kèo đôi nam nữ.",
-    email: "lan.nguyen@example.com",
-    avatar: "",
-    stats: { matchesPlayed: 88, winRate: 74, hoursActive: 220, followers: 132 },
-    sports: [
-      { name: "Badminton", level: "Advanced" },
-      { name: "Tennis", level: "Intermediate" },
-    ],
-    schedule: [
-      { day: "Thứ 4", time: "19:30", activity: "Cầu lông" },
-      { day: "Chủ nhật", time: "09:00", activity: "Tennis" },
-    ],
-  },
-  {
-    id: "p3",
-    name: "Hoàng Lê",
-    age: 21,
-    location: "Quận 7, TP.HCM",
-    bio: "Mới bắt đầu chơi tennis và bóng rổ, muốn tìm bạn tập cùng.",
-    email: "hoang.le@example.com",
-    avatar: "",
-    stats: { matchesPlayed: 24, winRate: 48, hoursActive: 60, followers: 18 },
-    sports: [
-      { name: "Tennis", level: "Beginner" },
-      { name: "Basketball", level: "Beginner" },
-    ],
-    schedule: [
-      { day: "Thứ 3", time: "18:00", activity: "Tennis" },
-      { day: "Thứ 7", time: "17:00", activity: "Bóng rổ" },
-    ],
-  },
-];
+const MOCK_PUBLIC_USERS: ApiUser[] = [];
 
 export default function PublicProfilePage() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const [favorited, setFavorited] = useState(false);
   const [following, setFollowing] = useState(false);
+  
+  const [user, setUser] = useState<ApiUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const user =
-    MOCK_PUBLIC_USERS.find((u) => u.id === params.id) ?? MOCK_PUBLIC_USERS[1]; // default user
+  useEffect(() => {
+    if (!params.id) {
+      setError("Không có ID người dùng");
+      setLoading(false);
+      return;
+    }
+
+    const loadUser = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await fetchUserById(params.id!);
+        setUser(data);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Không tải được thông tin");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUser();
+  }, [params.id]);
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Pressable style={styles.headerBtn} onPress={() => router.back()}>
+            <Text style={styles.headerBtnText}>←</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <View style={styles.headerBtnPlaceholder} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#ff4d4f" size="large" />
+          <Text style={styles.loadingText}>Đang tải...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error || !user) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Pressable style={styles.headerBtn} onPress={() => router.back()}>
+            <Text style={styles.headerBtnText}>←</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <View style={styles.headerBtnPlaceholder} />
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error || "Không tìm thấy người dùng"}</Text>
+          <Pressable style={styles.retryBtn} onPress={() => router.back()}>
+            <Text style={styles.retryText}>Quay lại</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -108,13 +97,19 @@ export default function PublicProfilePage() {
 
       <View style={styles.profileCard}>
         <View style={styles.avatarCircle}>
-          <Text style={styles.avatarInitial}>{user.name.charAt(0)}</Text>
+          {user.avatar ? (
+            <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarInitial}>
+              {user.name?.charAt(0) || "?"}
+            </Text>
+          )}
         </View>
         <Text style={styles.name}>{user.name}</Text>
         <Text style={styles.meta}>
-          {user.age} tuổi • {user.location}
+          {user.location || "Chưa cập nhật vị trí"}
         </Text>
-        <Text style={styles.bio}>{user.bio}</Text>
+        {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
       </View>
 
       <View style={styles.actionsRow}>
@@ -160,31 +155,18 @@ export default function PublicProfilePage() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Thống kê</Text>
         <View style={styles.statsRow}>
-          <Stat label="Trận đã chơi" value={user.stats.matchesPlayed} />
-          <Stat label="Tỷ lệ thắng (%)" value={user.stats.winRate} />
-        </View>
-        <View style={styles.statsRow}>
-          <Stat label="Giờ hoạt động" value={user.stats.hoursActive} />
-          <Stat label="Người theo dõi" value={user.stats.followers} />
+          <Stat label="Trận đã chơi" value={user.matchesPlayed || 0} />
+          <Stat label="Tỷ lệ thắng (%)" value={user.winRate || 0} />
         </View>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Môn thể thao</Text>
-        {user.sports.map((s, idx) => (
-          <Text key={`${s.name}-${idx}`} style={styles.listItem}>
-            • {s.name} ({s.level})
-          </Text>
-        ))}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Lịch tập luyện</Text>
-        {user.schedule.map((s, idx) => (
-          <Text key={`${s.day}-${idx}`} style={styles.listItem}>
-            • {s.day} • {s.time} • {s.activity}
-          </Text>
-        ))}
+        {user.sport ? (
+          <Text style={styles.listItem}>• {user.sport} ({user.level || "Tất cả"})</Text>
+        ) : (
+          <Text style={styles.listItem}>Chưa cập nhật môn thể thao</Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -208,6 +190,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 32,
     paddingBottom: 120,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
+  },
+  loadingText: {
+    color: "#888888",
+    fontSize: 14,
+    marginTop: 12,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    color: "#ff8888",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  retryBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#ff4d4f",
+  },
+  retryText: {
+    color: "#ff4d4f",
+    fontSize: 14,
+    fontWeight: "600",
   },
   headerRow: {
     flexDirection: "row",
@@ -253,6 +271,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarInitial: {
     color: "#ffffff",

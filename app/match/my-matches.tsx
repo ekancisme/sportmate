@@ -8,10 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
 import {
-  deleteMatch,
-  fetchMyMatches,
-  formatDateVi,
-  type ApiMatch,
+    deleteMatch,
+    fetchMyMatches,
+    formatDateVi,
+    type ApiMatch,
 } from '@/lib/matchApi';
 
 const PRIMARY = '#ff4d4f';

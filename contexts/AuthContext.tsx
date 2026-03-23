@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import React, { createContext, ReactNode, useContext, useState } from 'react';
 
+import { resolveAvatarUrl } from '@/lib/userApi';
+
 type Role = 'user' | 'admin';
 
 export type AuthUser = {
@@ -66,6 +68,9 @@ type AuthContextValue = {
   fetchSuggestedPartners: (options?: {
     maxDistance?: number;
     limit?: number;
+    latitude?: number;
+    longitude?: number;
+    userLocation?: string;
   }) => Promise<{ partners: SuggestedPartner[]; total: number; userLocation: string | null }>;
 };
 
@@ -192,16 +197,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchSuggestedPartners: AuthContextValue["fetchSuggestedPartners"] = async ({
     maxDistance = 10,
-    limit = 10,
+    limit = 20,
+    latitude,
+    longitude,
+    userLocation,
   } = {}) => {
     try {
       const params = new URLSearchParams({
-        maxDistance: String(maxDistance),
         limit: String(limit),
       });
 
       if (user?.id) {
         params.append("userId", user.id);
+      }
+      
+      // Truyền tọa độ GPS nếu có
+      if (latitude != null && longitude != null) {
+        params.append("lat", String(latitude));
+        params.append("lng", String(longitude));
+      }
+      
+      // Truyền location string nếu có (từ GPS)
+      if (userLocation) {
+        params.append("currentLocation", userLocation);
       }
 
       const res = await fetch(`${API_BASE_URL}/api/partners/suggested?${params}`);
@@ -212,8 +230,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { partners: [], total: 0, userLocation: null };
       }
 
+      const raw = data.partners || [];
+      const partners = raw.map((p: SuggestedPartner) => ({
+        ...p,
+        avatar: resolveAvatarUrl(p.avatar),
+      }));
+
       return {
-        partners: data.partners || [],
+        partners,
         total: data.total || 0,
         userLocation: data.userLocation,
       };
