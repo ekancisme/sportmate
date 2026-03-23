@@ -57,7 +57,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 }
 
 export default function MatchDetailScreen() {
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; refresh?: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [baseMatch, setBaseMatch] = useState<MatchDetail | null>(null);
@@ -96,7 +96,7 @@ export default function MatchDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [params.id, user?.id]);
+  }, [params.id, params.refresh, user?.id]);
 
   const match = baseMatch ?? undefined;
 
@@ -140,6 +140,7 @@ export default function MatchDetailScreen() {
   const isFavorite = favorites[match.id] ?? false;
   const isJoined = Boolean(match.viewerJoined);
   const spotsLeft = Math.max(0, match.maxPlayers - match.currentPlayers);
+  const matchStatus = match.status ?? 'active';
   const isHost = Boolean(user?.id && match.hostId && user.id === match.hostId);
 
   const toggleFavorite = () => {
@@ -160,6 +161,14 @@ export default function MatchDetailScreen() {
   const toggleJoin = async () => {
     if (!user?.id) {
       Alert.alert('Đăng nhập', 'Vui lòng đăng nhập để tham gia trận.');
+      return;
+    }
+    if (matchStatus === 'finished') {
+      Alert.alert('Trận đã kết thúc', 'Bạn không thể tham gia hoặc rời trận này nữa.');
+      return;
+    }
+    if (matchStatus === 'cancelled') {
+      Alert.alert('Trận đã bị hủy', 'Bạn không thể tham gia hoặc rời trận này nữa.');
       return;
     }
     setJoinBusy(true);
@@ -279,17 +288,23 @@ export default function MatchDetailScreen() {
             <Text style={styles.statusLabel}>Tình trạng</Text>
             <View style={styles.statusBadge}>
               <Text style={styles.statusBadgeText}>
-                {spotsLeft > 0 ? `${spotsLeft} chỗ trống` : 'Đã đủ người'}
+                {matchStatus === 'active'
+                  ? spotsLeft > 0
+                    ? `${spotsLeft} chỗ trống`
+                    : 'Đã đủ người'
+                  : matchStatus === 'finished'
+                    ? 'Đã kết thúc'
+                    : 'Đã hủy'}
               </Text>
             </View>
             <Pressable
               onPress={toggleJoin}
-              disabled={joinBusy || (!isJoined && spotsLeft <= 0)}
+              disabled={joinBusy || matchStatus !== 'active' || (!isJoined && spotsLeft <= 0)}
               style={({ pressed }) => [
                 styles.joinCta,
                 isJoined && styles.joinCtaOutline,
                 (pressed || joinBusy) && styles.pressed,
-                joinBusy && styles.joinCtaDisabled,
+                (joinBusy || matchStatus !== 'active') && styles.joinCtaDisabled,
               ]}>
               {joinBusy ? (
                 <ActivityIndicator color="#fff" />
@@ -300,6 +315,26 @@ export default function MatchDetailScreen() {
               )}
             </Pressable>
           </View>
+
+          {matchStatus === 'finished' ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Người thắng</Text>
+              <Text style={styles.bodyText}>
+                {match.winners && match.winners.length > 0
+                  ? match.winners
+                      .map((wid) => match.participants.find((p) => p.id === wid)?.name || wid)
+                      .join(', ')
+                  : 'Chưa được chọn.'}
+              </Text>
+            </View>
+          ) : null}
+
+          {matchStatus === 'cancelled' ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Lý do hủy trận</Text>
+              <Text style={styles.bodyText}>{match.cancelReason || '—'}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Người Tổ Chức</Text>
@@ -746,7 +781,7 @@ const styles = StyleSheet.create({
     color: PRIMARY,
   },
   joinCtaDisabled: {
-    opacity: 0.7,
+    opacity: 0.45,
   },
   orgRow: {
     flexDirection: 'row',

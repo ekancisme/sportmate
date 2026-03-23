@@ -21,7 +21,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
 import { getApiBaseUrl } from '@/lib/apiBase';
-import { fetchMatchById, updateMatch, type ApiMatch } from '@/lib/matchApi';
+import {
+  fetchMatchById,
+  updateMatch,
+  type ApiMatch,
+  type ApiMatchParticipant,
+  type MatchStatus,
+} from '@/lib/matchApi';
 
 const SPORTS = [
   'Bóng Đá',
@@ -229,6 +235,13 @@ export default function CreateMatch() {
   const [tempTimeEnd, setTempTimeEnd] = useState(() => new Date());
   const [submitting, setSubmitting] = useState(false);
   const [loadingMatch, setLoadingMatch] = useState(!!editId);
+  const [resultSubmitting, setResultSubmitting] = useState(false);
+
+  const [matchStatus, setMatchStatus] = useState<MatchStatus>('active');
+  const [matchParticipants, setMatchParticipants] = useState<ApiMatchParticipant[]>([]);
+  const [winnerIds, setWinnerIds] = useState<string[]>([]);
+  const [cancelReasonDraft, setCancelReasonDraft] = useState('');
+  const [resultAction, setResultAction] = useState<'finish' | 'cancel' | null>(null);
 
   useEffect(() => {
     if (!editId || !user?.id) {
@@ -248,6 +261,17 @@ export default function CreateMatch() {
           return;
         }
         setForm(apiMatchToForm(raw));
+        setMatchStatus(raw.status ?? 'active');
+        setMatchParticipants(raw.participants ?? []);
+        setWinnerIds(raw.winners ?? []);
+        setCancelReasonDraft(raw.cancelReason ?? '');
+        setResultAction(
+          raw.status === 'finished'
+            ? 'finish'
+            : raw.status === 'cancelled'
+              ? 'cancel'
+              : null,
+        );
       } catch {
         if (!cancelled) {
           showAlert('Lỗi', 'Không tải được trận để sửa.', {
@@ -412,6 +436,89 @@ export default function CreateMatch() {
       showAlert('Lỗi', msg, { variant: 'error' });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const toggleWinner = (pid: string) => {
+    setWinnerIds((prev) => {
+      if (prev.includes(pid)) return prev.filter((x) => x !== pid);
+      return [...prev, pid];
+    });
+  };
+
+  const confirmFinish = async () => {
+    if (!user?.id || !editId) return;
+    const participantIds = matchParticipants.map((p) => p.id);
+    if (winnerIds.length === 0) {
+      showAlert('Người thắng', 'Vui lòng chọn ít nhất 1 người thắng.', {
+        variant: 'error',
+      });
+      return;
+    }
+    const invalid = winnerIds.filter((wid) => !participantIds.includes(wid));
+    if (invalid.length > 0) {
+      showAlert('Người thắng', 'Người thắng phải thuộc danh sách người tham gia.', {
+        variant: 'error',
+      });
+      return;
+    }
+
+    setResultSubmitting(true);
+    try {
+      await updateMatch(editId, user.id, {
+        status: 'finished',
+        winners: winnerIds,
+      });
+      showAlert('Thành công', 'Đã cập nhật kết quả trận đấu.', {
+        variant: 'success',
+        onConfirm: () =>
+          router.replace({
+            pathname: '/match',
+            params: { id: editId, refresh: String(Date.now()) },
+          }),
+      });
+    } catch (e) {
+      showAlert(
+        'Lỗi',
+        e instanceof Error ? e.message : 'Không cập nhật được kết quả trận.',
+        { variant: 'error' },
+      );
+    } finally {
+      setResultSubmitting(false);
+    }
+  };
+
+  const confirmCancel = async () => {
+    if (!user?.id || !editId) return;
+    const reason = cancelReasonDraft.trim();
+    if (reason.length < 5) {
+      showAlert('Lý do hủy', 'Vui lòng nhập lý do (ít nhất 5 ký tự).', {
+        variant: 'error',
+      });
+      return;
+    }
+    setResultSubmitting(true);
+    try {
+      await updateMatch(editId, user.id, {
+        status: 'cancelled',
+        cancelReason: reason,
+      });
+      showAlert('Thành công', 'Đã hủy trận và gửi lý do cho người tham gia.', {
+        variant: 'success',
+        onConfirm: () =>
+          router.replace({
+            pathname: '/match',
+            params: { id: editId, refresh: String(Date.now()) },
+          }),
+      });
+    } catch (e) {
+      showAlert(
+        'Lỗi',
+        e instanceof Error ? e.message : 'Không hủy được trận.',
+        { variant: 'error' },
+      );
+    } finally {
+      setResultSubmitting(false);
     }
   };
 
@@ -1056,6 +1163,127 @@ export default function CreateMatch() {
         />
       </View>
 
+      {isEditMode ? (
+        <View style={styles.resultSection}>
+          <Text style={styles.resultTitle}>Kết thúc / Hủy trận đấu</Text>
+          <Text style={styles.resultSubtitle}>
+            Chỉ host mới có thể cập nhật kết quả. Người tham gia sẽ thấy trạng thái này ngay.
+          </Text>
+
+          {matchStatus === 'active' ? (
+            <>
+              <View style={styles.resultActionRow}>
+                <Pressable
+                  style={[
+                    styles.resultActionBtn,
+                    resultAction === 'finish' && styles.resultActionBtnSelected,
+                  ]}
+                  onPress={() => setResultAction('finish')}>
+                  <Text style={styles.resultActionBtnText}>Đã xong</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.resultActionBtn,
+                    resultAction === 'cancel' && styles.resultActionBtnSelected,
+                  ]}
+                  onPress={() => setResultAction('cancel')}>
+                  <Text style={styles.resultActionBtnText}>Hủy trận</Text>
+                </Pressable>
+              </View>
+
+              {resultAction === 'finish' ? (
+                <View style={styles.resultInner}>
+                  <Text style={styles.resultInnerTitle}>Chọn người thắng</Text>
+                  {matchParticipants.length === 0 ? (
+                    <Text style={styles.muted}>Chưa có người tham gia.</Text>
+                  ) : (
+                    <View style={styles.winnersGrid}>
+                      {matchParticipants.map((p) => {
+                        const selected = winnerIds.includes(p.id);
+                        return (
+                          <Pressable
+                            key={p.id}
+                            onPress={() => toggleWinner(p.id)}
+                            style={({ pressed }) => [
+                              styles.winnerPickCard,
+                              selected && styles.winnerPickCardSelected,
+                              pressed && { opacity: 0.85 },
+                            ]}>
+                            <Text style={styles.winnerPickName}>
+                              {p.name || p.username || 'Người chơi'}
+                            </Text>
+                            <Ionicons
+                              name={
+                                selected ? 'checkmark-circle' : 'radio-button-off'
+                              }
+                              size={20}
+                              color={selected ? '#ff4d4f' : '#888'}
+                            />
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
+                  <Text style={styles.resultHint}>
+                    Đã chọn: {winnerIds.length}
+                  </Text>
+                  <Pressable
+                    style={[styles.confirmBtn, resultSubmitting && styles.confirmBtnDisabled]}
+                    onPress={confirmFinish}
+                    disabled={resultSubmitting || matchParticipants.length === 0}>
+                    <Text style={styles.confirmBtnText}>
+                      {resultSubmitting ? 'Đang cập nhật...' : 'Xác nhận kết thúc'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {resultAction === 'cancel' ? (
+                <View style={styles.resultInner}>
+                  <Text style={styles.resultInnerTitle}>Nhập lý do hủy</Text>
+                  <TextInput
+                    style={[styles.input, styles.cancelReasonInput]}
+                    value={cancelReasonDraft}
+                    onChangeText={setCancelReasonDraft}
+                    placeholder="VD: Trận bị mưa lớn, sân không đảm bảo..."
+                    placeholderTextColor="#777"
+                    multiline
+                    onFocus={scrollMultilineIntoView}
+                  />
+                  <Pressable
+                    style={[styles.confirmBtnDanger, resultSubmitting && styles.confirmBtnDisabled]}
+                    onPress={confirmCancel}
+                    disabled={resultSubmitting}>
+                    <Text style={styles.confirmBtnText}>Xác nhận hủy</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </>
+          ) : matchStatus === 'finished' ? (
+            <View style={styles.resultReadonly}>
+              <Text style={styles.resultInnerTitle}>Đã kết thúc</Text>
+              <Text style={styles.bodyText}>
+                {winnerIds.length > 0
+                  ? winnerIds
+                      .map(
+                        (wid) =>
+                          matchParticipants.find((p) => p.id === wid)?.name ||
+                          matchParticipants.find((p) => p.id === wid)?.username ||
+                          wid,
+                      )
+                      .join(', ')
+                  : 'Chưa có người thắng.'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.resultReadonly}>
+              <Text style={styles.resultInnerTitle}>Đã hủy</Text>
+              <Text style={styles.bodyText}>{cancelReasonDraft || '—'}</Text>
+            </View>
+          )}
+        </View>
+      ) : null}
+
       <Pressable
         style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
         onPress={handleSubmit}
@@ -1415,6 +1643,136 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 15,
+  },
+  resultSection: {
+    marginTop: 18,
+    marginBottom: 8,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#222',
+    backgroundColor: '#0f0f0f',
+  },
+  resultTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  resultSubtitle: {
+    color: '#888',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  resultActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  resultActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+    backgroundColor: '#111',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultActionBtnSelected: {
+    borderColor: PRIMARY,
+    backgroundColor: 'rgba(255, 77, 79, 0.12)',
+  },
+  resultActionBtnText: {
+    color: '#ddd',
+    fontWeight: '700',
+  },
+  resultInner: {
+    marginTop: 14,
+  },
+  resultInnerTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  winnersGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  winnerPickCard: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#222',
+    backgroundColor: '#111',
+    marginBottom: 10,
+  },
+  winnerPickCardSelected: {
+    borderColor: PRIMARY,
+    backgroundColor: 'rgba(255, 77, 79, 0.12)',
+  },
+  winnerPickName: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+    marginRight: 8,
+  },
+  resultHint: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  cancelReasonInput: {
+    minHeight: 110,
+    textAlignVertical: 'top',
+  },
+  confirmBtn: {
+    backgroundColor: PRIMARY,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnDanger: {
+    backgroundColor: '#884444',
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnDisabled: {
+    opacity: 0.75,
+  },
+  confirmBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  resultReadonly: {
+    marginTop: 14,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#222',
+    backgroundColor: '#111',
+  },
+  bodyText: {
+    color: '#aaa',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  muted: {
+    color: '#888',
+    fontSize: 13,
+    lineHeight: 18,
   },
   submitBtn: {
     marginTop: 12,
