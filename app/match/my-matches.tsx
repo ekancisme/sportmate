@@ -1,22 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { Fragment, useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
 import {
-  deleteMatch,
-  fetchMyMatches,
-  formatDateVi,
-  type ApiMatch,
+    deleteMatch,
+    fetchMyMatches,
+    formatDateVi,
+    type ApiMatch,
 } from '@/lib/matchApi';
 
 const PRIMARY = '#ff4d4f';
 
-export default function MyMatchesScreen() {
+export type MyMatchesScreenProps = {
+  /** Khi mở trong tab bar — ẩn nút quay lại */
+  embeddedInTab?: boolean;
+};
+
+export default function MyMatchesScreen({ embeddedInTab = false }: MyMatchesScreenProps) {
   const { user } = useAuth();
   const { show, Alert: AppAlertNode } = useAppAlert();
   const insets = useSafeAreaInsets();
@@ -76,7 +81,7 @@ export default function MyMatchesScreen() {
     return (
       <Fragment>
         <View style={[styles.centered, { paddingTop: insets.top + 40 }]}>
-          <Text style={styles.muted}>Đăng nhập để xem trận bạn đã tạo.</Text>
+          <Text style={styles.muted}>Đăng nhập để xem trận bạn tạo và trận bạn tham gia.</Text>
           <Pressable style={styles.primaryBtn} onPress={() => router.replace('/(auth)')}>
             <Text style={styles.primaryBtnText}>Đăng nhập</Text>
           </Pressable>
@@ -91,14 +96,17 @@ export default function MyMatchesScreen() {
     <ScrollView
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-      <View style={[styles.topRow, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={PRIMARY} />
-          <Text style={styles.backText}>Quay lại</Text>
-        </Pressable>
-      </View>
+      {!embeddedInTab ? (
+        <View style={[styles.topRow, { paddingTop: insets.top + 8 }]}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={24} color={PRIMARY} />
+            <Text style={styles.backText}>Quay lại</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={{ paddingTop: insets.top + 8 }} />
+      )}
       <Text style={styles.title}>Trận của tôi</Text>
-      <Text style={styles.sub}>Các trận bạn làm host — sửa hoặc xóa khi cần.</Text>
 
       {loading ? (
         <View style={styles.loadingBox}>
@@ -107,15 +115,23 @@ export default function MyMatchesScreen() {
       ) : err ? (
         <Text style={styles.err}>{err}</Text>
       ) : list.length === 0 ? (
-        <Text style={styles.muted}>Bạn chưa tạo trận nào.</Text>
+        <Text style={styles.muted}>
+          Chưa có trận nào. Tham gia trận trên trang chủ hoặc tạo trận mới.
+        </Text>
       ) : (
         list.map((m) => {
           const cur = Number(m.currentPlayers ?? 0);
+          const isHost = Boolean(user?.id && m.hostId && user.id === m.hostId);
           return (
             <View key={m.id} style={styles.card}>
               <Pressable
                 onPress={() => router.push({ pathname: '/match', params: { id: m.id } })}>
-                <Text style={styles.cardTitle}>{m.title}</Text>
+                <View style={styles.cardTitleRow}>
+                  <Text style={styles.cardTitle}>{m.title}</Text>
+                  <View style={[styles.roleBadge, isHost ? styles.roleBadgeHost : styles.roleBadgeJoin]}>
+                    <Text style={styles.roleBadgeText}>{isHost ? 'Host' : 'Tham gia'}</Text>
+                  </View>
+                </View>
                 <Text style={styles.cardMeta}>
                   {m.sport} • {formatDateVi(m.date)} • {m.time || '—'}
                 </Text>
@@ -124,21 +140,23 @@ export default function MyMatchesScreen() {
                   Người chơi: {cur}/{m.maxPlayers}
                 </Text>
               </Pressable>
-              <View style={styles.actions}>
-                <Pressable
-                  style={styles.secondaryBtn}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/match/create-match',
-                      params: { editId: m.id },
-                    })
-                  }>
-                  <Text style={styles.secondaryBtnText}>Sửa</Text>
-                </Pressable>
-                <Pressable style={styles.dangerBtn} onPress={() => onDelete(m)}>
-                  <Text style={styles.dangerBtnText}>Xóa</Text>
-                </Pressable>
-              </View>
+              {isHost ? (
+                <View style={styles.actions}>
+                  <Pressable
+                    style={styles.secondaryBtn}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/match/create-match',
+                        params: { editId: m.id },
+                      })
+                    }>
+                    <Text style={styles.secondaryBtnText}>Sửa</Text>
+                  </Pressable>
+                  <Pressable style={styles.dangerBtn} onPress={() => onDelete(m)}>
+                    <Text style={styles.dangerBtnText}>Xóa</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
           );
         })
@@ -223,11 +241,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#222',
   },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
   cardTitle: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
-    marginBottom: 4,
+    flex: 1,
+  },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  roleBadgeHost: {
+    backgroundColor: 'rgba(255, 77, 79, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 77, 79, 0.45)',
+  },
+  roleBadgeJoin: {
+    backgroundColor: 'rgba(120, 180, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(120, 180, 255, 0.4)',
+  },
+  roleBadgeText: {
+    color: '#ccc',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   cardMeta: {
     color: '#aaa',

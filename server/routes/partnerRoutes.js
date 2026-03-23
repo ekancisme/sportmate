@@ -85,7 +85,7 @@ router.get('/suggested', async (req, res) => {
     
     // Lấy thông tin user hiện tại để biết location
     // Ưu tiên: currentLocation (từ GPS) > user.location (từ DB)
-    let userLocation = currentLocation as string | null;
+    let userLocation = currentLocation || null;
     
     if (!userLocation && userId) {
       const currentUser = await User.findById(userId).select('location').lean();

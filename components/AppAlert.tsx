@@ -47,6 +47,12 @@ export function AppAlert({
   animationType = 'fade',
 }: AppAlertProps) {
   const canDismissBackdrop = backdropDismissable ?? variant !== 'success';
+  const safeConfirmLabel = (() => {
+    if (confirmLabel === null || confirmLabel === undefined) return 'OK';
+    const s = String(confirmLabel).trim();
+    return s ? s : 'OK';
+  })();
+  const safeConfirmLabelForSuccess = variant === 'success' ? 'OK' : safeConfirmLabel;
 
   return (
     <Modal visible={visible} transparent animationType={animationType} onRequestClose={onDismiss}>
@@ -72,12 +78,12 @@ export function AppAlert({
                 <Text style={styles.btnGhostText}>{cancelLabel}</Text>
               </Pressable>
               <Pressable style={[styles.btn, { backgroundColor: accentColor }]} onPress={onConfirm}>
-                <Text style={styles.btnText}>{confirmLabel}</Text>
+                <Text style={styles.btnText}>{safeConfirmLabelForSuccess}</Text>
               </Pressable>
             </View>
           ) : (
             <Pressable style={[styles.btn, styles.btnSingle, { backgroundColor: accentColor }]} onPress={onConfirm}>
-              <Text style={styles.btnText}>{confirmLabel}</Text>
+              <Text style={styles.btnText}>{safeConfirmLabelForSuccess}</Text>
             </Pressable>
           )}
         </Pressable>
@@ -101,7 +107,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#2a2a2a',
-    paddingVertical: 24,
+    paddingVertical: 35,
     paddingHorizontal: 20,
     alignItems: 'center',
   },
@@ -154,12 +160,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     minWidth: 100,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 18,
+    lineHeight: 22,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
 });

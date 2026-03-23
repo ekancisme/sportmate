@@ -1,6 +1,14 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { fetchUserById, type ApiUser } from "@/lib/userApi";
 
@@ -89,7 +97,13 @@ export default function PublicProfilePage() {
 
       <View style={styles.profileCard}>
         <View style={styles.avatarCircle}>
-          <Text style={styles.avatarInitial}>{user.name?.charAt(0) || "?"}</Text>
+          {user.avatar ? (
+            <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarInitial}>
+              {user.name?.charAt(0) || "?"}
+            </Text>
+          )}
         </View>
         <Text style={styles.name}>{user.name}</Text>
         <Text style={styles.meta}>
@@ -257,6 +271,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarInitial: {
     color: "#ffffff",

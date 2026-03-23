@@ -16,6 +16,17 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useAuth, AuthUser } from '@/contexts/AuthContext';
 
+type EditableSport = {
+  name: string;
+  level: string;
+};
+
+type EditableScheduleItem = {
+  day: string;
+  time?: string;
+  activity: string;
+};
+
 type EditableProfile = {
   name: string;
   location: string;
@@ -23,6 +34,8 @@ type EditableProfile = {
   phone: string;
   bio: string;
   avatar: string;
+  sports: EditableSport[];
+  schedule: EditableScheduleItem[];
 };
 
 function getApiBaseUrl() {
@@ -53,6 +66,8 @@ export default function EditProfileScreen() {
     phone: '',
     bio: '',
     avatar: '',
+    sports: [],
+    schedule: [],
   });
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const apiBase = getApiBaseUrl();
@@ -66,6 +81,8 @@ export default function EditProfileScreen() {
       phone: authUser.phone || '',
       bio: authUser.bio || '',
       avatar: authUser.avatar || '',
+      sports: authUser.sports ?? [],
+      schedule: authUser.schedule ?? [],
     });
   }, [authUser]);
 
@@ -218,6 +235,142 @@ export default function EditProfileScreen() {
           />
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Môn thể thao</Text>
+
+          {profile.sports.length === 0 ? (
+            <Text style={styles.muted}>Chưa có môn nào. Thêm môn để hiển thị trên profile.</Text>
+          ) : null}
+
+          {profile.sports.map((s, idx) => (
+            <View key={`${idx}`} style={styles.dynamicRow}>
+              <TextInput
+                style={[styles.dynamicInput, styles.dynamicInputName]}
+                value={s.name}
+                onChangeText={(text) => {
+                  setProfile((prev) => {
+                    const next = [...prev.sports];
+                    next[idx] = { ...next[idx], name: text };
+                    return { ...prev, sports: next };
+                  });
+                }}
+                placeholder="Tên môn"
+                placeholderTextColor="#777"
+              />
+              <TextInput
+                style={[styles.dynamicInput, styles.dynamicInputLevel]}
+                value={s.level}
+                onChangeText={(text) => {
+                  setProfile((prev) => {
+                    const next = [...prev.sports];
+                    next[idx] = { ...next[idx], level: text };
+                    return { ...prev, sports: next };
+                  });
+                }}
+                placeholder="Level"
+                placeholderTextColor="#777"
+              />
+              <Pressable
+                onPress={() => {
+                  setProfile((prev) => {
+                    const next = prev.sports.filter((_, i) => i !== idx);
+                    return { ...prev, sports: next };
+                  });
+                }}
+                style={styles.removeBtn}>
+                <Text style={styles.removeBtnText}>X</Text>
+              </Pressable>
+            </View>
+          ))}
+
+          <Pressable
+            onPress={() => {
+              setProfile((prev) => ({
+                ...prev,
+                sports: [...prev.sports, { name: '', level: '' }],
+              }));
+            }}
+            style={styles.addBtn}>
+            <Text style={styles.addBtnText}>+ Thêm môn</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Lịch tập luyện</Text>
+
+          {profile.schedule.length === 0 ? (
+            <Text style={styles.muted}>Chưa có lịch. Thêm để hiển thị trên profile.</Text>
+          ) : null}
+
+          {profile.schedule.map((it, idx) => (
+            <View key={`${idx}`} style={styles.dynamicRowSchedule}>
+              <TextInput
+                style={[styles.dynamicInput, styles.dynamicInputDay]}
+                value={it.day}
+                onChangeText={(text) => {
+                  setProfile((prev) => {
+                    const next = [...prev.schedule];
+                    next[idx] = { ...next[idx], day: text };
+                    return { ...prev, schedule: next };
+                  });
+                }}
+                placeholder="Thứ"
+                placeholderTextColor="#777"
+              />
+              <TextInput
+                style={[styles.dynamicInput, styles.dynamicInputTime]}
+                value={it.time ?? ''}
+                onChangeText={(text) => {
+                  setProfile((prev) => {
+                    const next = [...prev.schedule];
+                    next[idx] = { ...next[idx], time: text };
+                    return { ...prev, schedule: next };
+                  });
+                }}
+                placeholder="Giờ"
+                placeholderTextColor="#777"
+              />
+              <TextInput
+                style={[styles.dynamicInput, styles.dynamicInputActivity]}
+                value={it.activity}
+                onChangeText={(text) => {
+                  setProfile((prev) => {
+                    const next = [...prev.schedule];
+                    next[idx] = { ...next[idx], activity: text };
+                    return { ...prev, schedule: next };
+                  });
+                }}
+                placeholder="Hoạt động"
+                placeholderTextColor="#777"
+              />
+              <Pressable
+                onPress={() => {
+                  setProfile((prev) => {
+                    const next = prev.schedule.filter((_, i) => i !== idx);
+                    return { ...prev, schedule: next };
+                  });
+                }}
+                style={styles.removeBtn}>
+                <Text style={styles.removeBtnText}>X</Text>
+              </Pressable>
+            </View>
+          ))}
+
+          <Pressable
+            onPress={() => {
+              setProfile((prev) => ({
+                ...prev,
+                schedule: [
+                  ...prev.schedule,
+                  { day: '', time: '', activity: '' },
+                ],
+              }));
+            }}
+            style={styles.addBtn}>
+            <Text style={styles.addBtnText}>+ Thêm lịch</Text>
+          </Pressable>
+        </View>
+
         <Pressable style={styles.saveBtn} onPress={handleSave}>
           <Text style={styles.saveText}>Lưu thay đổi</Text>
         </Pressable>
@@ -364,6 +517,82 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 8,
+  },
+  muted: {
+    color: '#aaa',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  dynamicRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  dynamicRowSchedule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  dynamicInput: {
+    backgroundColor: '#111',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: '#fff',
+    fontSize: 13,
+  },
+  dynamicInputName: {
+    flex: 1,
+    minWidth: 110,
+  },
+  dynamicInputLevel: {
+    flex: 0.8,
+    minWidth: 90,
+  },
+  dynamicInputDay: {
+    flex: 0.75,
+    minWidth: 70,
+  },
+  dynamicInputTime: {
+    flex: 0.75,
+    minWidth: 70,
+  },
+  dynamicInputActivity: {
+    flex: 1.2,
+    minWidth: 140,
+  },
+  removeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeBtnText: {
+    color: '#ff8888',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  addBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#111',
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  addBtnText: {
+    color: '#ff4d4f',
+    fontSize: 13,
+    fontWeight: '700',
   },
   field: {
     marginBottom: 10,

@@ -13,7 +13,8 @@ export type ApiUser = {
   level?: string;
 };
 
-function resolveAvatarUrl(avatar: string | undefined): string | undefined {
+/** Chuẩn hóa avatar từ API (path tương đối → URL đầy đủ cho Image) */
+export function resolveAvatarUrl(avatar: string | undefined): string | undefined {
   if (!avatar?.trim()) return undefined;
   if (avatar.startsWith('http')) return avatar;
   const base = getApiBaseUrl();

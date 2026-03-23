@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import React, { createContext, ReactNode, useContext, useState } from 'react';
 
+import { resolveAvatarUrl } from '@/lib/userApi';
+
 type Role = 'user' | 'admin';
 
 export type AuthUser = {
@@ -228,8 +230,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { partners: [], total: 0, userLocation: null };
       }
 
+      const raw = data.partners || [];
+      const partners = raw.map((p: SuggestedPartner) => ({
+        ...p,
+        avatar: resolveAvatarUrl(p.avatar),
+      }));
+
       return {
-        partners: data.partners || [],
+        partners,
         total: data.total || 0,
         userLocation: data.userLocation,
       };

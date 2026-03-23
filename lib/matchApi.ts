@@ -9,6 +9,15 @@ export type ApiMatchHost = {
   winRate?: number;
 };
 
+export type ApiMatchParticipant = {
+  id: string;
+  name?: string;
+  username?: string;
+  avatar?: string;
+};
+
+export type MatchStatus = 'active' | 'finished' | 'cancelled';
+
 export type ApiMatch = {
   id: string;
   /** Host tạo trận (MongoDB id) */
@@ -24,6 +33,10 @@ export type ApiMatch = {
   rules: string;
   currentPlayers?: number;
   host?: ApiMatchHost | null;
+  participants?: ApiMatchParticipant[];
+  status?: MatchStatus;
+  winners?: string[];
+  cancelReason?: string;
   /** Có khi GET /api/matches/:id?userId=... hoặc sau join/leave */
   viewerJoined?: boolean;
 };
@@ -63,6 +76,9 @@ export type MatchDetail = {
   /** Bạn đã tham gia trận (theo server) */
   viewerJoined?: boolean;
   hostId?: string;
+  status?: MatchStatus;
+  winners?: string[];
+  cancelReason?: string;
 };
 
 export function formatDateVi(iso: string): string {
@@ -138,6 +154,13 @@ export function mapApiMatchToDetail(raw: ApiMatch): MatchDetail {
   const reqLines = requirementsFromDescription(raw.description);
   const level = mapMinSkillToLevel(raw.minSkillLevel);
 
+  const participants = (raw.participants ?? []).map((p) => ({
+    id: p.id,
+    name: p.name || p.username || 'Người tham gia',
+    level: 'Intermediate' as const,
+    avatarUrl: resolveAvatarUrl(p.avatar),
+  }));
+
   return {
     id: raw.id,
     title: raw.title,
@@ -166,10 +189,13 @@ export function mapApiMatchToDetail(raw: ApiMatch): MatchDetail {
       matchesPlayed: host?.matchesPlayed ?? 0,
       avatarUrl: resolveAvatarUrl(host?.avatar),
     },
-    participants: [],
+    participants,
     mapUrl: mapUrlFor(raw.location),
     viewerJoined: Boolean(raw.viewerJoined),
     hostId: raw.hostId,
+    status: raw.status,
+    winners: raw.winners,
+    cancelReason: raw.cancelReason,
   };
 }
 
@@ -180,25 +206,29 @@ export async function fetchMatches(): Promise<ApiMatch[]> {
   return res.json();
 }
 
-export async function fetchMyMatches(hostId: string): Promise<ApiMatch[]> {
+/** Trận bạn tạo (host) và trận bạn tham gia (participant) */
+export async function fetchMyMatches(userId: string): Promise<ApiMatch[]> {
   const base = getApiBaseUrl();
   const res = await fetch(
-    `${base}/api/matches/mine?hostId=${encodeURIComponent(hostId)}`,
+    `${base}/api/matches/mine?userId=${encodeURIComponent(userId)}`,
   );
   if (!res.ok) throw new Error('Không tải được trận của bạn');
   return res.json();
 }
 
 export type UpdateMatchPayload = {
-  sport: string;
-  title: string;
-  location: string;
-  date: string;
-  time: string;
-  maxPlayers: number;
-  minSkillLevel: string;
-  description: string;
-  rules: string;
+  sport?: string;
+  title?: string;
+  location?: string;
+  date?: string;
+  time?: string;
+  maxPlayers?: number;
+  minSkillLevel?: string;
+  description?: string;
+  rules?: string;
+  status?: MatchStatus;
+  winners?: string[];
+  cancelReason?: string;
 };
 
 export async function updateMatch(
