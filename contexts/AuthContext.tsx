@@ -66,6 +66,9 @@ type AuthContextValue = {
   fetchSuggestedPartners: (options?: {
     maxDistance?: number;
     limit?: number;
+    latitude?: number;
+    longitude?: number;
+    userLocation?: string;
   }) => Promise<{ partners: SuggestedPartner[]; total: number; userLocation: string | null }>;
 };
 
@@ -192,16 +195,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchSuggestedPartners: AuthContextValue["fetchSuggestedPartners"] = async ({
     maxDistance = 10,
-    limit = 10,
+    limit = 20,
+    latitude,
+    longitude,
+    userLocation,
   } = {}) => {
     try {
       const params = new URLSearchParams({
-        maxDistance: String(maxDistance),
         limit: String(limit),
       });
 
       if (user?.id) {
         params.append("userId", user.id);
+      }
+      
+      // Truyền tọa độ GPS nếu có
+      if (latitude != null && longitude != null) {
+        params.append("lat", String(latitude));
+        params.append("lng", String(longitude));
+      }
+      
+      // Truyền location string nếu có (từ GPS)
+      if (userLocation) {
+        params.append("currentLocation", userLocation);
       }
 
       const res = await fetch(`${API_BASE_URL}/api/partners/suggested?${params}`);

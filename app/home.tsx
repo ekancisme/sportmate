@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Pressable,
   ScrollView,
@@ -12,12 +13,13 @@ import {
   View,
 } from "react-native";
 
+import { useAuth, type SuggestedPartner } from "@/contexts/AuthContext";
 import {
   fetchMatches,
   formatMatchListSubtitle,
   type ApiMatch,
 } from "@/lib/matchApi";
-import { useAuth, type SuggestedPartner } from "@/contexts/AuthContext";
+import { requestCurrentLocation } from "@/lib/locationUtils";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -38,6 +40,11 @@ export default function HomeScreen() {
 
   const { user, fetchSuggestedPartners } = useAuth();
 
+  const [currentLocation, setCurrentLocation] = useState<{
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  } | null>(null);
   const [partners, setPartners] = useState<SuggestedPartner[]>([]);
   const [partnersLoading, setPartnersLoading] = useState(true);
   const [partnersError, setPartnersError] = useState<string | null>(null);
@@ -51,19 +58,35 @@ export default function HomeScreen() {
     [partners],
   );
 
+  const requestLocation = useCallback(async () => {
+    const location = await requestCurrentLocation();
+    if (location) {
+      setCurrentLocation({
+        address: location.address,
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
+    }
+  }, []);
+
   const loadPartners = useCallback(async () => {
     setPartnersLoading(true);
     setPartnersError(null);
     try {
-      const result = await fetchSuggestedPartners({ limit: 20 });
+      const result = await fetchSuggestedPartners({ 
+        limit: 20,
+        userLocation: currentLocation?.address,
+      });
       setPartners(result.partners);
     } catch (e) {
-      setPartnersError(e instanceof Error ? e.message : "Không tải được partner");
+      setPartnersError(
+        e instanceof Error ? e.message : "Không tải được partner",
+      );
       setPartners([]);
     } finally {
       setPartnersLoading(false);
     }
-  }, [fetchSuggestedPartners, user?.id]);
+  }, [fetchSuggestedPartners, user?.id, currentLocation?.address]);
 
   const loadMatches = useCallback(async () => {
     setMatchesLoading(true);
@@ -79,6 +102,13 @@ export default function HomeScreen() {
     }
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      requestLocation();
+    }, [requestLocation]),
+  );
+
+  // Load partners sau khi có location
   useFocusEffect(
     useCallback(() => {
       loadPartners();
@@ -132,6 +162,26 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      <View style={styles.locationCard}>
+        <View style={styles.locationContent}>
+          <Text style={styles.locationIcon}>📍</Text>
+          {currentLocation ? (
+            <Text style={styles.locationText}>{currentLocation.address}</Text>
+          ) : (
+            <Pressable onPress={requestLocation}>
+              <Text style={styles.locationRequestText}>
+                Nhấn để cập nhật vị trí của bạn
+              </Text>
+            </Pressable>
+          )}
+        </View>
+        {!currentLocation && (
+          <Pressable style={styles.locationBtn} onPress={requestLocation}>
+            <Text style={styles.locationBtnText}>📍 Cập nhật</Text>
+          </Pressable>
+        )}
+      </View>
+
       <View style={styles.quickRow}>
         <Pressable
           style={styles.quickCard}
@@ -162,7 +212,7 @@ export default function HomeScreen() {
             </Text>
           )}
         </View>
-        
+
         {partnersLoading ? (
           <View style={styles.partnerLoadingCard}>
             <ActivityIndicator color="#ff4d4d" />
@@ -177,7 +227,9 @@ export default function HomeScreen() {
           </View>
         ) : partners.length === 0 ? (
           <View style={styles.partnerEmptyCard}>
-            <Text style={styles.partnerEmptyText}>Chưa có partner nào gần bạn</Text>
+            <Text style={styles.partnerEmptyText}>
+              Chưa có partner nào gần bạn
+            </Text>
           </View>
         ) : (
           <ScrollView
@@ -235,10 +287,15 @@ export default function HomeScreen() {
                       <Pressable
                         style={styles.partnerBtnProfile}
                         onPress={() =>
-                          router.push({ pathname: "/profile", params: { id: p.id } })
+                          router.push({
+                            pathname: "/profile",
+                            params: { id: p.id },
+                          })
                         }
                       >
-                        <Text style={styles.partnerBtnProfileText}>👤 Profile</Text>
+                        <Text style={styles.partnerBtnProfileText}>
+                          👤 Profile
+                        </Text>
                       </Pressable>
                     </View>
                   </View>
@@ -380,6 +437,46 @@ const styles = StyleSheet.create({
     color: "#ff4d4f",
     fontWeight: "600",
     fontSize: 14,
+  },
+  locationCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  locationContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 8,
+  },
+  locationIcon: {
+    fontSize: 18,
+  },
+  locationText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
+  },
+  locationRequestText: {
+    color: "#888888",
+    fontSize: 13,
+  },
+  locationBtn: {
+    backgroundColor: "#ff4d4f",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginLeft: 12,
+  },
+  locationBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
   },
   statsRow: {
     flexDirection: "row",

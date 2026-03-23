@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "@/lib/apiBase";
+import { getApiBaseUrl } from '@/lib/apiBase';
 
 export type ApiUser = {
   id: string;
@@ -15,26 +15,25 @@ export type ApiUser = {
 
 function resolveAvatarUrl(avatar: string | undefined): string | undefined {
   if (!avatar?.trim()) return undefined;
-  if (avatar.startsWith("http")) return avatar;
+  if (avatar.startsWith('http')) return avatar;
   const base = getApiBaseUrl();
-  return `${base}${avatar.startsWith("/") ? avatar : `/${avatar}`}`;
+  return `${base}${avatar.startsWith('/') ? avatar : `/${avatar}`}`;
 }
 
-export async function fetchSuggestedPartners(options?: {
-  excludeUserId?: string;
-  limit?: number;
-}): Promise<ApiUser[]> {
+export async function fetchSuggestedPartners(
+  options?: { excludeUserId?: string; limit?: number },
+): Promise<ApiUser[]> {
   const base = getApiBaseUrl();
   const params = new URLSearchParams();
   if (options?.excludeUserId) {
-    params.set("exclude", options.excludeUserId);
+    params.set('exclude', options.excludeUserId);
   }
   if (options?.limit) {
-    params.set("limit", String(options.limit));
+    params.set('limit', String(options.limit));
   }
-  const query = params.toString() ? `?${params.toString()}` : "";
+  const query = params.toString() ? `?${params.toString()}` : '';
   const res = await fetch(`${base}/api/users${query}`);
-  if (!res.ok) throw new Error("Không tải được danh sách partner");
+  if (!res.ok) throw new Error('Không tải được danh sách partner');
   const data = await res.json();
   return data.map((u: ApiUser & { avatar?: string }) => ({
     ...u,
@@ -45,8 +44,8 @@ export async function fetchSuggestedPartners(options?: {
 export async function fetchUserById(id: string): Promise<ApiUser> {
   const base = getApiBaseUrl();
   const res = await fetch(`${base}/api/users/${encodeURIComponent(id)}`);
-  if (res.status === 404) throw new Error("Không tìm thấy người dùng");
-  if (!res.ok) throw new Error("Không tải được thông tin người dùng");
+  if (res.status === 404) throw new Error('Không tìm thấy người dùng');
+  if (!res.ok) throw new Error('Không tải được thông tin người dùng');
   const data = await res.json();
   return {
     ...data,
