@@ -1,15 +1,15 @@
-import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
 import { router } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import {
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
+} from 'react-native';
 
 import { fetchMatches, formatMatchListSubtitle, type ApiMatch } from '@/lib/matchApi';
 

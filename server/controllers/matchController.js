@@ -18,15 +18,19 @@ async function listMatches(_req, res) {
 
 async function listMine(req, res) {
   try {
-    const hostId = req.query.hostId;
-    if (!hostId || !mongoose.Types.ObjectId.isValid(String(hostId))) {
-      return res.status(400).json({ error: 'Thiếu hoặc sai hostId' });
+    const userId = req.query.userId || req.query.hostId;
+    if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+      return res.status(400).json({ error: 'Thiếu hoặc sai userId (hoặc hostId)' });
     }
-    const matches = await Match.find({ hostId })
+    const uid = new mongoose.Types.ObjectId(String(userId));
+    const matches = await Match.find({
+      $or: [{ hostId: uid }, { participantIds: uid }],
+    })
       .sort({ createdAt: -1 })
       .limit(100)
       .populate('hostId', 'name username avatar stats');
-    return res.json(matches.map((m) => matchJsonWithHost(m)));
+    const viewer = String(userId);
+    return res.json(matches.map((m) => matchJsonWithHost(m, { viewerUserId: viewer })));
   } catch (error) {
     console.error('❌ GET /api/matches/mine', error);
     return res.status(500).json({ error: 'Không lấy được trận của bạn' });

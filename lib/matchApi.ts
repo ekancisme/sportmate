@@ -180,10 +180,11 @@ export async function fetchMatches(): Promise<ApiMatch[]> {
   return res.json();
 }
 
-export async function fetchMyMatches(hostId: string): Promise<ApiMatch[]> {
+/** Trận bạn tạo (host) và trận bạn tham gia (participant) */
+export async function fetchMyMatches(userId: string): Promise<ApiMatch[]> {
   const base = getApiBaseUrl();
   const res = await fetch(
-    `${base}/api/matches/mine?hostId=${encodeURIComponent(hostId)}`,
+    `${base}/api/matches/mine?userId=${encodeURIComponent(userId)}`,
   );
   if (!res.ok) throw new Error('Không tải được trận của bạn');
   return res.json();

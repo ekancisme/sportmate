@@ -179,7 +179,7 @@ export default function MyProfile() {
       <View style={styles.actionsRow}>
         <Pressable
           style={[styles.secondaryBtn, styles.actionBtn]}
-          onPress={() => router.push('/match/my-matches')}>
+          onPress={() => router.push('/(tabs)/my-matches')}>
           <Text style={styles.secondaryBtnText}>Trận của tôi</Text>
         </Pressable>
         <Pressable
