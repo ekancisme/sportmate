@@ -3,6 +3,22 @@ const User = require('../models/User');
 const Match = require('../models/Match');
 const { matchJsonWithHost } = require('../utils/matchJson');
 
+// ── Helper: chuyển yyyy-mm-dd sang tên Thứ (tiếng Việt) ─────────────────
+const DAYS_VI = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+function buildDayLabel(dateStr) {
+  if (!dateStr) return 'Chưa rõ';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `${DAYS_VI[dt.getDay()]} (${d}/${m})`;
+}
+
+// ── Helper: lấy giờ bắt đầu từ range "HH:mm - HH:mm" ─────────────────────
+function buildTimeLabel(timeStr) {
+  if (!timeStr) return '';
+  // "19:30 - 21:00" -> "19:30"
+  return timeStr.split('-')[0].trim();
+}
+
 async function listMatches(_req, res) {
   try {
     const matches = await Match.find()
@@ -104,6 +120,35 @@ async function joinMatch(req, res) {
     doc.participantIds = [...pids, uid];
     doc.currentPlayers = doc.participantIds.length;
     await doc.save();
+
+    // ── Thêm lịch trình vào user ──────────────────────────────────────────
+    try {
+      const user = await User.findById(userId);
+      if (user) {
+        // Kiểm tra đã có schedule liên kết trận này chưa (idempotent)
+        const alreadyLinked = (user.schedule || []).some(
+          (s) => s.matchId && String(s.matchId) === id,
+        );
+        if (!alreadyLinked) {
+          // Chuyển date (yyyy-mm-dd) sang tên thứ tiếng Việt
+          const dayLabel = buildDayLabel(doc.date);
+          // Lấy giờ bắt đầu từ time range "HH:mm - HH:mm" hoặc nguyên cỗi
+          const timeLabel = buildTimeLabel(doc.time);
+
+          user.schedule.push({
+            day: dayLabel,
+            time: timeLabel,
+            activity: doc.title,
+            matchId: doc._id,
+          });
+          await user.save();
+        }
+      }
+    } catch (schedErr) {
+      console.warn('⚠️ Không cập nhật được schedule khi join:', schedErr.message);
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     await doc.populate('hostId', 'name username avatar stats');
     await doc.populate('participantIds', 'name username avatar');
     return res.json(matchJsonWithHost(doc, { viewerUserId: String(userId) }));
@@ -143,8 +188,22 @@ async function leaveMatch(req, res) {
 
     doc.participantIds = pids.filter((p) => !p.equals(uid));
     doc.currentPlayers = doc.participantIds.length;
-
     await doc.save();
+
+    // ── Xóa lịch trình khỏi user ──────────────────────────────────────────
+    try {
+      const user = await User.findById(userId);
+      if (user) {
+        user.schedule = (user.schedule || []).filter(
+          (s) => !s.matchId || String(s.matchId) !== id,
+        );
+        await user.save();
+      }
+    } catch (schedErr) {
+      console.warn('⚠️ Không xóa được schedule khi leave:', schedErr.message);
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     await doc.populate('hostId', 'name username avatar stats');
     await doc.populate('participantIds', 'name username avatar');
     return res.json(matchJsonWithHost(doc, { viewerUserId: String(userId) }));

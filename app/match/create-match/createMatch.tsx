@@ -226,13 +226,19 @@ export default function CreateMatch() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const [form, setForm] = useState<MatchForm>(initialForm);
+  // --- Date picker ---
   const [dateModalOpen, setDateModalOpen] = useState(false);
   const [tempDate, setTempDate] = useState(() => new Date());
+  // draft dùng cho web TextInput (uncontrolled flow)
+  const [dateDraft, setDateDraft] = useState('');
+  // --- Time picker ---
   const [timeModalOpen, setTimeModalOpen] = useState(false);
   /** Chọn giờ theo 2 bước: chỉ một đồng hồ mỗi lần */
   const [timePickStep, setTimePickStep] = useState<'start' | 'end'>('start');
   const [tempTimeStart, setTempTimeStart] = useState(() => new Date());
   const [tempTimeEnd, setTempTimeEnd] = useState(() => new Date());
+  const [timeDraftStart, setTimeDraftStart] = useState('');
+  const [timeDraftEnd, setTimeDraftEnd] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loadingMatch, setLoadingMatch] = useState(!!editId);
   const [resultSubmitting, setResultSubmitting] = useState(false);
@@ -547,7 +553,9 @@ export default function CreateMatch() {
     const today = startOfToday();
     const b = new Date(base);
     b.setHours(0, 0, 0, 0);
-    setTempDate(b < today ? new Date() : base);
+    const init = b < today ? new Date() : base;
+    setTempDate(init);
+    setDateDraft(formatDateStore(init));
     setDateModalOpen(true);
   };
 
@@ -615,6 +623,10 @@ export default function CreateMatch() {
     }
     setTempTimeStart(start);
     setTempTimeEnd(end);
+    const fmt = (d: Date) =>
+      `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    setTimeDraftStart(fmt(start));
+    setTimeDraftEnd(fmt(end));
     setTimePickStep('start');
     setTimeModalOpen(true);
   };
@@ -823,100 +835,226 @@ export default function CreateMatch() {
         />
       </View>
 
-      <Modal
-        visible={dateModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDateModalOpen(false)}
-      >
-        <Pressable style={styles.dateModalBackdrop} onPress={() => setDateModalOpen(false)}>
-          <View style={styles.dateModalCard}>
-            <Text style={styles.dateModalTitle}>Chọn ngày</Text>
-            {Platform.OS === 'web' ? (
-              <>
-                <Text style={styles.dateModalHint}>Nhập ngày (YYYY-MM-DD)</Text>
-                <TextInput
-                  placeholder="2026-03-22"
-                  placeholderTextColor="#666"
-                  style={styles.dateWebInput}
-                  value={formatDateStore(tempDate)}
-                  onChangeText={(t) => {
-                    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t.trim());
-                    if (m) {
-                      setTempDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-                    }
-                  }}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Pressable
-                  style={styles.dateModalBtn}
-                  onPress={() => {
-                    if (formatDateStore(tempDate) < formatDateStore(startOfToday())) {
-                      showAlert('Ngày', 'Không chọn ngày trong quá khứ.', { variant: 'error' });
-                      return;
-                    }
-                    confirmDate();
-                  }}
-                >
-                  <Text style={styles.dateModalBtnText}>Xong</Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <DateTimePicker
-                  value={tempDate}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
-                  onChange={onDatePickerChange}
-                  themeVariant="dark"
-                  locale="vi-VN"
-                  minimumDate={startOfToday()}
-                />
-                {Platform.OS === 'ios' ? (
-                  <Pressable style={styles.dateModalBtn} onPress={confirmDate}>
-                    <Text style={styles.dateModalBtnText}>Xong</Text>
-                  </Pressable>
-                ) : null}
-              </>
-            )}
-          </View>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        visible={timeModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={closeTimeModal}
-      >
-        <Pressable style={styles.dateModalBackdrop} onPress={closeTimeModal}>
-          <View style={styles.dateModalCard}>
-            <Text style={styles.dateModalTitle}>
-              {timePickStep === 'start' ? 'Giờ bắt đầu' : 'Giờ kết thúc'}
-            </Text>
-            {Platform.OS === 'web' ? (
-              timePickStep === 'start' ? (
+      {/* ── Date picker ──
+           Android: render trực tiếp (no custom modal), hệ thống tự hiện dialog
+           iOS/web: dùng Modal với View card                                     */}
+      {Platform.OS === 'android' && dateModalOpen && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="calendar"
+          onChange={onDatePickerChange}
+          minimumDate={startOfToday()}
+        />
+      )}
+      {Platform.OS !== 'android' && (
+        <Modal
+          visible={dateModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDateModalOpen(false)}
+        >
+          <Pressable style={styles.dateModalBackdrop} onPress={() => setDateModalOpen(false)} />
+          <View style={styles.dateModalCardContainer} pointerEvents="box-none">
+            <View style={styles.dateModalCard}>
+              <Text style={styles.dateModalTitle}>Chọn ngày</Text>
+              {Platform.OS === 'web' ? (
                 <>
-                  <Text style={styles.dateModalHint}>Nhập HH:mm</Text>
+                  <Text style={styles.dateModalHint}>Nhập ngày (YYYY-MM-DD)</Text>
                   <TextInput
-                    placeholder="20:00"
+                    placeholder="2026-03-22"
                     placeholderTextColor="#666"
                     style={styles.dateWebInput}
-                    value={`${String(tempTimeStart.getHours()).padStart(2, '0')}:${String(tempTimeStart.getMinutes()).padStart(2, '0')}`}
+                    value={dateDraft}
                     onChangeText={(t) => {
-                      const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim());
+                      setDateDraft(t);
+                      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t.trim());
                       if (m) {
-                        const d = mergeDateAndClock(
-                          form.date,
-                          new Date(2000, 0, 1, parseInt(m[1], 10), parseInt(m[2], 10)),
-                        );
-                        const minClock = getMinimumClockForDate(form.date);
-                        setTempTimeStart(d < minClock ? minClock : d);
+                        setTempDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
                       }
                     }}
                     autoCapitalize="none"
                     autoCorrect={false}
+                  />
+                  <Pressable
+                    style={styles.dateModalBtn}
+                    onPress={() => {
+                      if (formatDateStore(tempDate) < formatDateStore(startOfToday())) {
+                        showAlert('Ngày', 'Không chọn ngày trong quá khứ.', { variant: 'error' });
+                        return;
+                      }
+                      confirmDate();
+                    }}
+                  >
+                    <Text style={styles.dateModalBtnText}>Xong</Text>
+                  </Pressable>
+                </>
+              ) : (
+                /* iOS */
+                <>
+                  <DateTimePicker
+                    value={tempDate}
+                    mode="date"
+                    display="inline"
+                    onChange={onDatePickerChange}
+                    themeVariant="dark"
+                    locale="vi-VN"
+                    minimumDate={startOfToday()}
+                  />
+                  <Pressable style={styles.dateModalBtn} onPress={confirmDate}>
+                    <Text style={styles.dateModalBtnText}>Xong</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* ── Time picker ── */}
+      {Platform.OS === 'android' && timeModalOpen && (
+        <DateTimePicker
+          value={timePickStep === 'start' ? tempTimeStart : tempTimeEnd}
+          mode="time"
+          display="clock"
+          is24Hour
+          onChange={(event, date) => {
+            if (event.type === 'dismissed') {
+              if (timePickStep === 'start') {
+                setTimeModalOpen(false);
+              } else {
+                setTimePickStep('start');
+              }
+              return;
+            }
+            if (event.type === 'set' && date) {
+              if (timePickStep === 'start') {
+                const merged = mergeDateAndClock(form.date, date);
+                const minClock = getMinimumClockForDate(form.date);
+                const next = merged < minClock ? minClock : merged;
+                setTempTimeStart(next);
+                setTempTimeEnd((prev) =>
+                  prev <= next ? new Date(next.getTime() + 60 * 60 * 1000) : prev,
+                );
+                // chuyển sang chọn giờ kết thúc
+                setTimePickStep('end');
+              } else {
+                const merged = mergeDateAndClock(form.date, date);
+                const minEnd = new Date(
+                  Math.max(
+                    tempTimeStart.getTime() + 60 * 1000,
+                    getMinimumClockForDate(form.date).getTime(),
+                  ),
+                );
+                const finalEnd = merged < minEnd ? minEnd : merged;
+                if (finalEnd <= tempTimeStart) {
+                  showAlert('Giờ', 'Giờ kết thúc phải sau giờ bắt đầu.', { variant: 'error' });
+                  return;
+                }
+                handleChange('time', formatTimeRange(tempTimeStart, finalEnd));
+                setTimeModalOpen(false);
+              }
+            }
+          }}
+        />
+      )}
+      {Platform.OS !== 'android' && (
+        <Modal
+          visible={timeModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={closeTimeModal}
+        >
+          <Pressable style={styles.dateModalBackdrop} onPress={closeTimeModal} />
+          <View style={styles.dateModalCardContainer} pointerEvents="box-none">
+            <View style={styles.dateModalCard}>
+              <Text style={styles.dateModalTitle}>
+                {timePickStep === 'start' ? 'Giờ bắt đầu' : 'Giờ kết thúc'}
+              </Text>
+              {Platform.OS === 'web' ? (
+                timePickStep === 'start' ? (
+                  <>
+                    <Text style={styles.dateModalHint}>Nhập HH:mm</Text>
+                    <TextInput
+                      placeholder="20:00"
+                      placeholderTextColor="#666"
+                      style={styles.dateWebInput}
+                      value={timeDraftStart}
+                      onChangeText={(t) => {
+                        setTimeDraftStart(t);
+                        const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim());
+                        if (m) {
+                          const d = mergeDateAndClock(
+                            form.date,
+                            new Date(2000, 0, 1, parseInt(m[1], 10), parseInt(m[2], 10)),
+                          );
+                          const minClock = getMinimumClockForDate(form.date);
+                          setTempTimeStart(d < minClock ? minClock : d);
+                        }
+                      }}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <Pressable style={styles.dateModalBtn} onPress={goToEndStep}>
+                      <Text style={styles.dateModalBtnText}>Tiếp</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.dateModalHint}>Nhập HH:mm</Text>
+                    <TextInput
+                      placeholder="21:30"
+                      placeholderTextColor="#666"
+                      style={styles.dateWebInput}
+                      value={timeDraftEnd}
+                      onChangeText={(t) => {
+                        setTimeDraftEnd(t);
+                        const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim());
+                        if (m) {
+                          const d = mergeDateAndClock(
+                            form.date,
+                            new Date(2000, 0, 1, parseInt(m[1], 10), parseInt(m[2], 10)),
+                          );
+                          const minEnd = new Date(
+                            Math.max(
+                              tempTimeStart.getTime() + 60 * 1000,
+                              getMinimumClockForDate(form.date).getTime(),
+                            ),
+                          );
+                          setTempTimeEnd(d < minEnd ? minEnd : d);
+                        }
+                      }}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <View style={styles.timeModalActions}>
+                      <Pressable
+                        style={styles.timeModalSecondaryBtn}
+                        onPress={() => setTimePickStep('start')}
+                      >
+                        <Text style={styles.timeModalSecondaryBtnText}>Quay lại</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.dateModalBtn, styles.timeModalPrimaryBtnFlex]}
+                        onPress={confirmTime}
+                      >
+                        <Text style={styles.dateModalBtnText}>Xong</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )
+              ) : /* iOS spinner */
+              timePickStep === 'start' ? (
+                <>
+                  <Text style={styles.dateModalHint}>Chọn giờ bắt đầu</Text>
+                  <DateTimePicker
+                    value={tempTimeStart}
+                    mode="time"
+                    display="spinner"
+                    onChange={onTimeStartChange}
+                    themeVariant="dark"
+                    locale="vi-VN"
+                    minimumDate={getMinimumClockForDate(form.date)}
                   />
                   <Pressable style={styles.dateModalBtn} onPress={goToEndStep}>
                     <Text style={styles.dateModalBtnText}>Tiếp</Text>
@@ -924,30 +1062,15 @@ export default function CreateMatch() {
                 </>
               ) : (
                 <>
-                  <Text style={styles.dateModalHint}>Nhập HH:mm</Text>
-                  <TextInput
-                    placeholder="21:30"
-                    placeholderTextColor="#666"
-                    style={styles.dateWebInput}
-                    value={`${String(tempTimeEnd.getHours()).padStart(2, '0')}:${String(tempTimeEnd.getMinutes()).padStart(2, '0')}`}
-                    onChangeText={(t) => {
-                      const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim());
-                      if (m) {
-                        const d = mergeDateAndClock(
-                          form.date,
-                          new Date(2000, 0, 1, parseInt(m[1], 10), parseInt(m[2], 10)),
-                        );
-                        const minEnd = new Date(
-                          Math.max(
-                            tempTimeStart.getTime() + 60 * 1000,
-                            getMinimumClockForDate(form.date).getTime(),
-                          ),
-                        );
-                        setTempTimeEnd(d < minEnd ? minEnd : d);
-                      }
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
+                  <Text style={styles.dateModalHint}>Chọn giờ kết thúc</Text>
+                  <DateTimePicker
+                    value={tempTimeEnd}
+                    mode="time"
+                    display="spinner"
+                    onChange={onTimeEndChange}
+                    themeVariant="dark"
+                    locale="vi-VN"
+                    minimumDate={minEndForPicker}
                   />
                   <View style={styles.timeModalActions}>
                     <Pressable
@@ -964,56 +1087,11 @@ export default function CreateMatch() {
                     </Pressable>
                   </View>
                 </>
-              )
-            ) : timePickStep === 'start' ? (
-              <>
-                <Text style={styles.dateModalHint}>Chọn giờ bắt đầu</Text>
-                <DateTimePicker
-                  value={tempTimeStart}
-                  mode="time"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
-                  onChange={onTimeStartChange}
-                  themeVariant="dark"
-                  locale="vi-VN"
-                  minimumDate={getMinimumClockForDate(form.date)}
-                  {...(Platform.OS === 'android' ? { is24Hour: true as const } : {})}
-                />
-                <Pressable style={styles.dateModalBtn} onPress={goToEndStep}>
-                  <Text style={styles.dateModalBtnText}>Tiếp</Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Text style={styles.dateModalHint}>Chọn giờ kết thúc</Text>
-                <DateTimePicker
-                  value={tempTimeEnd}
-                  mode="time"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
-                  onChange={onTimeEndChange}
-                  themeVariant="dark"
-                  locale="vi-VN"
-                  minimumDate={minEndForPicker}
-                  {...(Platform.OS === 'android' ? { is24Hour: true as const } : {})}
-                />
-                <View style={styles.timeModalActions}>
-                  <Pressable
-                    style={styles.timeModalSecondaryBtn}
-                    onPress={() => setTimePickStep('start')}
-                  >
-                    <Text style={styles.timeModalSecondaryBtnText}>Quay lại</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.dateModalBtn, styles.timeModalPrimaryBtnFlex]}
-                    onPress={confirmTime}
-                  >
-                    <Text style={styles.dateModalBtnText}>Xong</Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
+              )}
+            </View>
           </View>
-        </Pressable>
-      </Modal>
+        </Modal>
+      )}
 
       <View style={styles.row}>
         <View style={[styles.field, styles.rowItem]}>
@@ -1567,8 +1645,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateModalBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  dateModalCardContainer: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
