@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 type UserSport = {
   name: string;
@@ -35,54 +35,54 @@ type UserProfile = {
 
 const MOCK_PUBLIC_USERS: UserProfile[] = [
   {
-    id: 'p1',
-    name: 'Minh Trần',
+    id: "p1",
+    name: "Minh Trần",
     age: 25,
-    location: 'Quận 1, TP.HCM',
-    bio: 'Tiền vệ trung tâm, ưu tiên các trận giao hữu vui vẻ nhưng quyết liệt.',
-    email: 'minh.tran@example.com',
-    avatar: '',
+    location: "Quận 1, TP.HCM",
+    bio: "Tiền vệ trung tâm, ưu tiên các trận giao hữu vui vẻ nhưng quyết liệt.",
+    email: "minh.tran@example.com",
+    avatar: "",
     stats: { matchesPlayed: 64, winRate: 61, hoursActive: 180, followers: 54 },
-    sports: [{ name: 'Football', level: 'Intermediate' }],
+    sports: [{ name: "Football", level: "Intermediate" }],
     schedule: [
-      { day: 'Thứ 2', time: '19:00', activity: 'Đá bóng 7 người' },
-      { day: 'Thứ 6', time: '20:00', activity: 'Giao hữu nội bộ' },
+      { day: "Thứ 2", time: "19:00", activity: "Đá bóng 7 người" },
+      { day: "Thứ 6", time: "20:00", activity: "Giao hữu nội bộ" },
     ],
   },
   {
-    id: 'p2',
-    name: 'Lan Nguyễn',
+    id: "p2",
+    name: "Lan Nguyễn",
     age: 23,
-    location: 'Quận 3, TP.HCM',
-    bio: 'Cầu lông trình độ cao, thích tham gia các kèo đôi nam nữ.',
-    email: 'lan.nguyen@example.com',
-    avatar: '',
+    location: "Quận 3, TP.HCM",
+    bio: "Cầu lông trình độ cao, thích tham gia các kèo đôi nam nữ.",
+    email: "lan.nguyen@example.com",
+    avatar: "",
     stats: { matchesPlayed: 88, winRate: 74, hoursActive: 220, followers: 132 },
     sports: [
-      { name: 'Badminton', level: 'Advanced' },
-      { name: 'Tennis', level: 'Intermediate' },
+      { name: "Badminton", level: "Advanced" },
+      { name: "Tennis", level: "Intermediate" },
     ],
     schedule: [
-      { day: 'Thứ 4', time: '19:30', activity: 'Cầu lông' },
-      { day: 'Chủ nhật', time: '09:00', activity: 'Tennis' },
+      { day: "Thứ 4", time: "19:30", activity: "Cầu lông" },
+      { day: "Chủ nhật", time: "09:00", activity: "Tennis" },
     ],
   },
   {
-    id: 'p3',
-    name: 'Hoàng Lê',
+    id: "p3",
+    name: "Hoàng Lê",
     age: 21,
-    location: 'Quận 7, TP.HCM',
-    bio: 'Mới bắt đầu chơi tennis và bóng rổ, muốn tìm bạn tập cùng.',
-    email: 'hoang.le@example.com',
-    avatar: '',
+    location: "Quận 7, TP.HCM",
+    bio: "Mới bắt đầu chơi tennis và bóng rổ, muốn tìm bạn tập cùng.",
+    email: "hoang.le@example.com",
+    avatar: "",
     stats: { matchesPlayed: 24, winRate: 48, hoursActive: 60, followers: 18 },
     sports: [
-      { name: 'Tennis', level: 'Beginner' },
-      { name: 'Basketball', level: 'Beginner' },
+      { name: "Tennis", level: "Beginner" },
+      { name: "Basketball", level: "Beginner" },
     ],
     schedule: [
-      { day: 'Thứ 3', time: '18:00', activity: 'Tennis' },
-      { day: 'Thứ 7', time: '17:00', activity: 'Bóng rổ' },
+      { day: "Thứ 3", time: "18:00", activity: "Tennis" },
+      { day: "Thứ 7", time: "17:00", activity: "Bóng rổ" },
     ],
   },
 ];
@@ -94,8 +94,7 @@ export default function PublicProfilePage() {
   const [following, setFollowing] = useState(false);
 
   const user =
-    MOCK_PUBLIC_USERS.find((u) => u.id === params.id) ??
-    MOCK_PUBLIC_USERS[1]; // default user
+    MOCK_PUBLIC_USERS.find((u) => u.id === params.id) ?? MOCK_PUBLIC_USERS[1]; // default user
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -123,17 +122,37 @@ export default function PublicProfilePage() {
           <Text style={styles.actionPrimaryText}>Nhắn tin</Text>
         </Pressable>
         <Pressable
-          style={[styles.actionBtn, favorited ? styles.actionSecondaryActive : styles.actionSecondary]}
-          onPress={() => setFavorited((v) => !v)}>
-          <Text style={favorited ? styles.actionSecondaryTextActive : styles.actionSecondaryText}>
-            {favorited ? 'Đã yêu thích' : 'Yêu thích'}
+          style={[
+            styles.actionBtn,
+            favorited ? styles.actionSecondaryActive : styles.actionSecondary,
+          ]}
+          onPress={() => setFavorited((v) => !v)}
+        >
+          <Text
+            style={
+              favorited
+                ? styles.actionSecondaryTextActive
+                : styles.actionSecondaryText
+            }
+          >
+            {favorited ? "Đã yêu thích" : "Yêu thích"}
           </Text>
         </Pressable>
         <Pressable
-          style={[styles.actionBtn, following ? styles.actionSecondaryActive : styles.actionSecondary]}
-          onPress={() => setFollowing((v) => !v)}>
-          <Text style={following ? styles.actionSecondaryTextActive : styles.actionSecondaryText}>
-            {following ? 'Đang follow' : 'Follow'}
+          style={[
+            styles.actionBtn,
+            following ? styles.actionSecondaryActive : styles.actionSecondary,
+          ]}
+          onPress={() => setFollowing((v) => !v)}
+        >
+          <Text
+            style={
+              following
+                ? styles.actionSecondaryTextActive
+                : styles.actionSecondaryText
+            }
+          >
+            {following ? "Đang follow" : "Follow"}
           </Text>
         </Pressable>
       </View>
@@ -183,7 +202,7 @@ function Stat({ label, value }: { label: string; value: number }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050505',
+    backgroundColor: "#050505",
   },
   content: {
     paddingHorizontal: 16,
@@ -191,74 +210,74 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
   headerBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#111',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerBtnPlaceholder: {
     width: 34,
     height: 34,
   },
   headerBtnText: {
-    color: '#aaa',
+    color: "#aaa",
     fontSize: 16,
   },
   headerTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   profileCard: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 20,
     marginBottom: 20,
     borderRadius: 24,
-    backgroundColor: '#101010',
+    backgroundColor: "#101010",
   },
   avatarCircle: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: "#1a1a1a",
     borderWidth: 2,
-    borderColor: '#ff4d4f55',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#ff4d4f55",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 8,
   },
   avatarInitial: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 26,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   name: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   meta: {
-    color: '#aaa',
+    color: "#aaa",
     fontSize: 13,
     marginTop: 2,
   },
   bio: {
-    color: '#ddd',
+    color: "#ddd",
     fontSize: 13,
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
     paddingHorizontal: 12,
   },
   actionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginBottom: 20,
   },
@@ -266,68 +285,67 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 999,
     paddingVertical: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   actionPrimary: {
-    backgroundColor: '#ff4d4f',
+    backgroundColor: "#ff4d4f",
   },
   actionPrimaryText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: "#fff",
+    fontWeight: "600",
     fontSize: 13,
   },
   actionSecondary: {
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: "#444",
   },
   actionSecondaryActive: {
     borderWidth: 1,
-    borderColor: '#ff4d4f',
-    backgroundColor: '#111',
+    borderColor: "#ff4d4f",
+    backgroundColor: "#111",
   },
   actionSecondaryText: {
-    color: '#ccc',
+    color: "#ccc",
     fontSize: 12,
   },
   actionSecondaryTextActive: {
-    color: '#ff4d4f',
+    color: "#ff4d4f",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   section: {
     marginBottom: 20,
   },
   sectionTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
   },
   statsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#111',
+    backgroundColor: "#111",
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
   statLabel: {
-    color: '#aaa',
+    color: "#aaa",
     fontSize: 12,
     marginBottom: 4,
   },
   statValue: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   listItem: {
-    color: '#ddd',
+    color: "#ddd",
     fontSize: 13,
     lineHeight: 18,
   },
 });
-
