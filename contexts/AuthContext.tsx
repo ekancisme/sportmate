@@ -3,7 +3,7 @@ import React, { createContext, ReactNode, useContext, useState } from 'react';
 
 import { resolveAvatarUrl } from '@/lib/userApi';
 
-type Role = 'user' | 'admin';
+type Role = 'user' | 'owner' | 'admin';
 
 export type AuthUser = {
   id: string;
@@ -83,8 +83,7 @@ function getApiBaseUrl() {
   const hostUri =
     Constants.expoConfig?.hostUri ||
     // fallback cho một số phiên bản Expo cũ
-    // @ts-expect-error manifest có thể không tồn tại trong type mới
-    Constants.manifest?.hostUri;
+    (Constants as { manifest?: { hostUri?: string } }).manifest?.hostUri;
 
   if (hostUri) {
     const host = hostUri.split(':')[0];

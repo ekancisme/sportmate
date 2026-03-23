@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -48,7 +48,7 @@ function validateRegister(
 }
 
 export default function AuthScreen() {
-  const { login, register, loading } = useAuth();
+  const { login, register, loading, isAuthenticated } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -113,7 +113,7 @@ export default function AuthScreen() {
       } catch {
         // ignore
       }
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     } else {
       const v = validateRegister(
         regUsername,
@@ -137,11 +137,15 @@ export default function AuthScreen() {
         setError(result.error || 'Có lỗi xảy ra');
         return;
       }
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     }
   };
 
   const isLogin = mode === 'login';
+
+  if (isAuthenticated) {
+    return <Redirect href="/(tabs)" />;
+  }
 
   return (
     <View style={styles.root}>
@@ -241,6 +245,7 @@ export default function AuthScreen() {
                 />
                 <Text style={styles.inputIcon}>📱</Text>
               </View>
+
               <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}

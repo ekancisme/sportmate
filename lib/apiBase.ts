@@ -7,8 +7,7 @@ export function getApiBaseUrl(): string {
 
   const hostUri =
     Constants.expoConfig?.hostUri ||
-    // @ts-expect-error manifest cũ
-    Constants.manifest?.hostUri;
+    (Constants as { manifest?: { hostUri?: string } }).manifest?.hostUri;
 
   if (hostUri) {
     const host = hostUri.split(':')[0];

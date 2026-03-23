@@ -7,7 +7,7 @@ const { findUserByEmailLoose } = require('../utils/userQueries');
 
 async function register(req, res) {
   try {
-    const { fullName, email, phone, password, role = 'user' } = req.body;
+    const { fullName, email, phone, password } = req.body;
 
     const name = (fullName || '').trim();
     const emailTrim = (email || '').trim().toLowerCase();
@@ -30,7 +30,6 @@ async function register(req, res) {
     if (phoneTrim && !/^[\d\s\-\+\(\)]+$/.test(phoneTrim)) {
       return res.status(400).json({ error: 'Số điện thoại không hợp lệ' });
     }
-
     const usernameBase = emailTrim.split('@')[0].replace(/[^a-z0-9_]/gi, '_');
     const username = `${usernameBase}_${Date.now().toString(36)}`.toLowerCase();
 
@@ -40,7 +39,7 @@ async function register(req, res) {
       email: emailTrim,
       phone: phoneTrim || '',
       password: hashPassword(String(password)),
-      role,
+      role: 'user',
     });
     const savedUser = await user.save();
     console.log(`✅ Registered: ${savedUser.id} (${savedUser.email})`);

@@ -44,7 +44,7 @@ function getApiBaseUrl() {
 
   const hostUri =
     Constants.expoConfig?.hostUri ||
-    Constants.manifest?.hostUri;
+    (Constants as { manifest?: { hostUri?: string } }).manifest?.hostUri;
 
   if (hostUri) {
     const host = hostUri.split(':')[0];
@@ -76,6 +76,13 @@ export default function MyProfile() {
   const { logout, user: authUser } = useAuth();
   const apiBase = getApiBaseUrl();
   const [user, setUser] = useState<UserProfile>(EMPTY_PROFILE);
+  const isOwner = authUser?.role === 'owner';
+  const profileRoleLabel =
+    authUser?.role === 'owner'
+      ? 'SportMate owner'
+      : authUser?.role === 'admin'
+        ? 'SportMate admin'
+        : 'Người chơi SportMate';
 
   const [myMatches, setMyMatches] = useState<ApiMatch[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
@@ -174,7 +181,7 @@ export default function MyProfile() {
         </View>
 
         <Text style={styles.profileName}>{user.name}</Text>
-        <Text style={styles.profileRole}>Người chơi SportMate</Text>
+        <Text style={styles.profileRole}>{profileRoleLabel}</Text>
         <Pressable
           onPress={() => router.push('/my-profile/edit')}
           style={styles.changeProfileBtn}
@@ -232,6 +239,15 @@ export default function MyProfile() {
           <Text style={styles.primaryBtnText}>+ Tạo trận đấu</Text>
         </Pressable>
       </View>
+      {isOwner ? (
+        <View style={styles.actionsRowSingle}>
+          <Pressable
+            style={[styles.primaryBtn, styles.actionBtn]}
+            onPress={() => router.push('/courts/my-courts' as never)}>
+            <Text style={styles.primaryBtnText}>Quản lý sân của tôi</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={styles.actionsRowSingle}>
         <Pressable
           style={[styles.secondaryBtn, styles.actionBtn]}

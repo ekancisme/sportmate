@@ -33,6 +33,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="courts"
+        options={{
+          title: 'Sân',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="business-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="ranking"
         options={{
           title: 'Bảng xếp hạng',
