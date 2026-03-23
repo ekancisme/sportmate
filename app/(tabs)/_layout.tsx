@@ -1,13 +1,11 @@
-import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: '#050505' },
-        headerTintColor: '#ffffff',
-        headerTitleStyle: { fontWeight: '600' },
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: '#050505',
           borderTopColor: '#333333',
@@ -21,6 +19,16 @@ export default function TabsLayout() {
           title: 'Trang chủ',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="my-matches"
+        options={{
+          title: 'Trận của tôi',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="football-outline" size={size} color={color} />
           ),
         }}
       />

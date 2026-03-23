@@ -3,7 +3,24 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// Các thành phần Đà Nẵng để so sánh
+// Tính khoảng cách Haversine giữa 2 điểm (km)
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Bán kính trái đất (km)
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function toRad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+// Các thành phố Đà Nẵng để so sánh
 const DA_NANG_KEYWORDS = ['đà nẵng', 'da nang', 'đn'];
 const HCM_KEYWORDS = ['tp.hcm', 'tp hcm', 'hồ chí minh', 'hcm', 'sài gòn'];
 const HN_KEYWORDS = ['hà nội', 'ha noi', 'hn', 'hanoi'];
@@ -64,14 +81,16 @@ function isMiềnBắc(loc) {
 // GET /api/partners/suggested - Lấy danh sách partners gợi ý
 router.get('/suggested', async (req, res) => {
   try {
-    const { userId, maxDistance = 10, limit = 10 } = req.query;
+    const { userId, lat, lng, limit = 20, currentLocation } = req.query;
     
     // Lấy thông tin user hiện tại để biết location
-    let currentUserLocation = null;
-    if (userId) {
+    // Ưu tiên: currentLocation (từ GPS) > user.location (từ DB)
+    let userLocation = currentLocation || null;
+    
+    if (!userLocation && userId) {
       const currentUser = await User.findById(userId).select('location').lean();
       if (currentUser?.location) {
-        currentUserLocation = currentUser.location;
+        userLocation = currentUser.location;
       }
     }
     
@@ -89,7 +108,7 @@ router.get('/suggested', async (req, res) => {
     // Transform và tính distance
     let result = users.map(u => {
       const userLoc = u.location || '';
-      const dist = currentUserLocation ? locationDistance(currentUserLocation, userLoc) : 1;
+      const dist = userLocation ? locationDistance(userLocation, userLoc) : 1;
       
       return {
         id: u._id.toString(),
@@ -102,7 +121,7 @@ router.get('/suggested', async (req, res) => {
         matchesPlayed: u.stats?.matchesPlayed || 0,
         sport: u.sports?.[0]?.name || null,
         level: u.sports?.[0]?.level || null,
-        _distance: dist, // 0 = cùng thành phố, 1 = cùng miền, 2 = khác miền
+        _distance: dist,
       };
     });
     
@@ -112,13 +131,16 @@ router.get('/suggested', async (req, res) => {
     // Giới hạn số lượng
     result = result.slice(0, Number(limit));
     
-    // Xóa field _distance trước khi trả về
-    result = result.map(({ _distance, ...rest }) => rest);
+    // Trả về kèm khoảng cách để hiển thị
+    result = result.map(({ _distance, ...rest }) => ({
+      ...rest,
+      distanceLevel: _distance === 0 ? 'same_city' : _distance === 1 ? 'same_region' : 'far',
+    }));
     
     res.json({
       partners: result,
       total: users.length,
-      userLocation: currentUserLocation,
+      userLocation: userLocation,
     });
   } catch (error) {
     console.error('Error fetching suggested partners:', error);

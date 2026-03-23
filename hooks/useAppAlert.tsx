@@ -67,7 +67,11 @@ export function useAppAlert() {
       title={payload?.title ?? ''}
       message={payload?.message ?? ''}
       variant={payload?.variant ?? 'info'}
-      confirmLabel={payload?.confirmLabel ?? 'OK'}
+      confirmLabel={
+        typeof payload?.confirmLabel === 'string' && payload.confirmLabel.trim()
+          ? payload.confirmLabel
+          : 'OK'
+      }
       cancelLabel={payload?.cancelLabel}
       onConfirm={handleConfirm}
       onDismiss={hide}

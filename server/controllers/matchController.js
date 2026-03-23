@@ -8,7 +8,8 @@ async function listMatches(_req, res) {
     const matches = await Match.find()
       .sort({ createdAt: -1 })
       .limit(100)
-      .populate('hostId', 'name username avatar stats');
+      .populate('hostId', 'name username avatar stats')
+      .populate('participantIds', 'name username avatar');
     return res.json(matches.map((m) => matchJsonWithHost(m)));
   } catch (error) {
     console.error('❌ GET /api/matches:', error);
@@ -18,15 +19,22 @@ async function listMatches(_req, res) {
 
 async function listMine(req, res) {
   try {
-    const hostId = req.query.hostId;
-    if (!hostId || !mongoose.Types.ObjectId.isValid(String(hostId))) {
-      return res.status(400).json({ error: 'Thiếu hoặc sai hostId' });
+    const userId = req.query.userId || req.query.hostId;
+    if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+      return res.status(400).json({ error: 'Thiếu hoặc sai userId (hoặc hostId)' });
     }
-    const matches = await Match.find({ hostId })
+    const uid = new mongoose.Types.ObjectId(String(userId));
+    const matches = await Match.find({
+      $or: [{ hostId: uid }, { participantIds: uid }],
+    })
       .sort({ createdAt: -1 })
       .limit(100)
-      .populate('hostId', 'name username avatar stats');
-    return res.json(matches.map((m) => matchJsonWithHost(m)));
+      .populate('hostId', 'name username avatar stats')
+      .populate('participantIds', 'name username avatar');
+    const viewer = String(userId);
+    return res.json(
+      matches.map((m) => matchJsonWithHost(m, { viewerUserId: viewer })),
+    );
   } catch (error) {
     console.error('❌ GET /api/matches/mine', error);
     return res.status(500).json({ error: 'Không lấy được trận của bạn' });
@@ -39,7 +47,9 @@ async function getMatch(req, res) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'ID không hợp lệ' });
     }
-    const doc = await Match.findById(id).populate('hostId', 'name username avatar stats');
+    const doc = await Match.findById(id)
+      .populate('hostId', 'name username avatar stats')
+      .populate('participantIds', 'name username avatar');
     if (!doc) {
       return res.status(404).json({ error: 'Không tìm thấy trận' });
     }
@@ -74,6 +84,9 @@ async function joinMatch(req, res) {
     if (!doc) {
       return res.status(404).json({ error: 'Không tìm thấy trận' });
     }
+    if (doc.status !== 'active') {
+      return res.status(400).json({ error: 'Trận này không còn mở để tham gia' });
+    }
 
     const uid = new mongoose.Types.ObjectId(String(userId));
     const pids = doc.participantIds || [];
@@ -92,6 +105,7 @@ async function joinMatch(req, res) {
     doc.currentPlayers = doc.participantIds.length;
     await doc.save();
     await doc.populate('hostId', 'name username avatar stats');
+    await doc.populate('participantIds', 'name username avatar');
     return res.json(matchJsonWithHost(doc, { viewerUserId: String(userId) }));
   } catch (error) {
     console.error('❌ POST /api/matches/:id/join', error);
@@ -115,6 +129,9 @@ async function leaveMatch(req, res) {
     if (!doc) {
       return res.status(404).json({ error: 'Không tìm thấy trận' });
     }
+    if (doc.status !== 'active') {
+      return res.status(400).json({ error: 'Trận này không còn mở để rời' });
+    }
 
     const uid = new mongoose.Types.ObjectId(String(userId));
     const pids = doc.participantIds || [];
@@ -129,6 +146,7 @@ async function leaveMatch(req, res) {
 
     await doc.save();
     await doc.populate('hostId', 'name username avatar stats');
+    await doc.populate('participantIds', 'name username avatar');
     return res.json(matchJsonWithHost(doc, { viewerUserId: String(userId) }));
   } catch (error) {
     console.error('❌ POST /api/matches/:id/leave', error);
@@ -150,6 +168,9 @@ async function patchMatch(req, res) {
       minSkillLevel,
       description,
       rules,
+      status,
+      winners,
+      cancelReason,
     } = req.body || {};
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -163,12 +184,57 @@ async function patchMatch(req, res) {
     if (!doc) {
       return res.status(404).json({ error: 'Không tìm thấy trận' });
     }
+    const prevStatus = doc.status;
     if (!doc.hostId.equals(new mongoose.Types.ObjectId(String(hostId)))) {
       return res.status(403).json({ error: 'Chỉ host mới được sửa trận' });
     }
 
     const pids = doc.participantIds || [];
     const used = pids.length > 0 ? pids.length : Number(doc.currentPlayers ?? 0);
+    const participantIdStrs = (doc.participantIds || []).map((p) => String(p));
+
+    if (status !== undefined) {
+      const next = String(status);
+      if (!['active', 'finished', 'cancelled'].includes(next)) {
+        return res.status(400).json({ error: 'Trạng thái không hợp lệ' });
+      }
+
+      if (next === 'finished') {
+        if (!Array.isArray(winners) || winners.length === 0) {
+          return res.status(400).json({ error: 'Kết thúc trận cần chọn người thắng' });
+        }
+        const winnerIds = winners.map((w) => String(w).trim());
+        for (const wid of winnerIds) {
+          if (!mongoose.Types.ObjectId.isValid(wid)) {
+            return res.status(400).json({ error: 'Danh sách người thắng không hợp lệ' });
+          }
+        }
+        if (participantIdStrs.length === 0) {
+          return res.status(400).json({ error: 'Trận chưa có người tham gia' });
+        }
+        const notInMatch = winnerIds.filter((wid) => !participantIdStrs.includes(wid));
+        if (notInMatch.length > 0) {
+          return res.status(400).json({ error: 'Người thắng phải thuộc danh sách người tham gia' });
+        }
+
+        doc.status = 'finished';
+        doc.winners = winnerIds.map((wid) => new mongoose.Types.ObjectId(wid));
+        doc.cancelReason = '';
+      } else if (next === 'cancelled') {
+        const reason = String(cancelReason || '').trim();
+        if (!reason || reason.length < 5) {
+          return res.status(400).json({ error: 'Hủy trận cần nhập lý do (ít nhất 5 ký tự)' });
+        }
+        doc.status = 'cancelled';
+        doc.winners = [];
+        doc.cancelReason = reason;
+      } else {
+        // active
+        doc.status = 'active';
+        doc.winners = [];
+        doc.cancelReason = '';
+      }
+    }
 
     if (sport !== undefined) {
       const sportTrim = String(sport || '').trim();
@@ -225,7 +291,44 @@ async function patchMatch(req, res) {
     }
 
     await doc.save();
+
+    // Nếu host chuyển trận từ active -> finished thì cập nhật thống kê tất cả người tham gia.
+    // - matchesPlayed: tăng 1 cho host + mọi participant trong trận.
+    // - matchesWon/winRate: tăng nếu user nằm trong winners.
+    if (doc.status === 'finished' && prevStatus !== 'finished') {
+      const winnerSet = new Set(
+        (Array.isArray(doc.winners) ? doc.winners : []).map((w) => String(w)),
+      );
+
+      const participantIdSet = new Set(
+        [
+          ...((doc.participantIds || []).map((p) => String(p)) || []),
+          String(doc.hostId),
+        ].filter(Boolean),
+      );
+
+      const userIds = Array.from(participantIdSet);
+      const users = await User.find({ _id: { $in: userIds } });
+
+      for (const u of users) {
+        const uid = String(u._id);
+        const played = Number(u.stats?.matchesPlayed ?? 0);
+        const won = Number(u.stats?.matchesWon ?? 0);
+
+        const newPlayed = played + 1;
+        const newWon = won + (winnerSet.has(uid) ? 1 : 0);
+        const newWinRate =
+          newPlayed > 0 ? Math.round((newWon / newPlayed) * 100) : 0;
+
+        u.stats.matchesPlayed = newPlayed;
+        u.stats.matchesWon = newWon;
+        u.stats.winRate = newWinRate;
+        await u.save();
+      }
+    }
+
     await doc.populate('hostId', 'name username avatar stats');
+    await doc.populate('participantIds', 'name username avatar');
     return res.json(matchJsonWithHost(doc, { viewerUserId: String(hostId) }));
   } catch (error) {
     console.error('❌ PATCH /api/matches/:id', error);

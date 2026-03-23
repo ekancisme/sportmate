@@ -15,6 +15,16 @@ const matchSchema = new mongoose.Schema(
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
       default: [],
     },
+    status: {
+      type: String,
+      enum: ['active', 'finished', 'cancelled'],
+      default: 'active',
+    },
+    winners: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+      default: [],
+    },
+    cancelReason: { type: String, default: '' },
     minSkillLevel: { type: String, default: 'Tất Cả' },
     description: { type: String, default: '' },
     rules: { type: String, default: '' },

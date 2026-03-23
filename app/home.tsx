@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,12 +13,14 @@ import {
   View,
 } from "react-native";
 
+import { useAuth, type SuggestedPartner } from "@/contexts/AuthContext";
 import {
   fetchMatches,
-  formatMatchListSubtitle,
+  formatDateVi,
   type ApiMatch,
 } from "@/lib/matchApi";
-import { useAuth, type SuggestedPartner } from "@/contexts/AuthContext";
+import { resolveAvatarUrl } from "@/lib/userApi";
+import { requestCurrentLocation } from "@/lib/locationUtils";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -31,6 +34,30 @@ function chunkPlayers<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+const SPORT_EMOJI: Record<string, string> = {
+  Football: "⚽",
+  Soccer: "⚽",
+  Basketball: "🏀",
+  Volleyball: "🏐",
+  Tennis: "🎾",
+  Badminton: "🏸",
+  "Ping Pong": "🏓",
+  "Table Tennis": "🏓",
+  Swimming: "🏊",
+  Running: "🏃",
+  Gym: "💪",
+  Fitness: "💪",
+  Cricket: "🏏",
+  default: "🏆",
+};
+
+function getSportEmoji(sport: string): string {
+  const key = Object.keys(SPORT_EMOJI).find(
+    (k) => sport.toLowerCase().includes(k.toLowerCase()),
+  );
+  return key ? SPORT_EMOJI[key] : SPORT_EMOJI.default;
+}
+
 export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const partnerPageWidth = windowWidth - 40;
@@ -38,6 +65,11 @@ export default function HomeScreen() {
 
   const { user, fetchSuggestedPartners } = useAuth();
 
+  const [currentLocation, setCurrentLocation] = useState<{
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  } | null>(null);
   const [partners, setPartners] = useState<SuggestedPartner[]>([]);
   const [partnersLoading, setPartnersLoading] = useState(true);
   const [partnersError, setPartnersError] = useState<string | null>(null);
@@ -51,6 +83,17 @@ export default function HomeScreen() {
     [partners],
   );
 
+  const requestLocation = useCallback(async () => {
+    const location = await requestCurrentLocation();
+    if (location) {
+      setCurrentLocation({
+        address: location.address,
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
+    }
+  }, []);
+
   const loadPartners = useCallback(async () => {
     setPartnersLoading(true);
     setPartnersError(null);
@@ -58,12 +101,14 @@ export default function HomeScreen() {
       const result = await fetchSuggestedPartners({ limit: 20 });
       setPartners(result.partners);
     } catch (e) {
-      setPartnersError(e instanceof Error ? e.message : "Không tải được partner");
+      setPartnersError(
+        e instanceof Error ? e.message : "Không tải được partner",
+      );
       setPartners([]);
     } finally {
       setPartnersLoading(false);
     }
-  }, [fetchSuggestedPartners, user?.id]);
+  }, [fetchSuggestedPartners, user?.id, currentLocation?.address]);
 
   const loadMatches = useCallback(async () => {
     setMatchesLoading(true);
@@ -79,6 +124,13 @@ export default function HomeScreen() {
     }
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      requestLocation();
+    }, [requestLocation]),
+  );
+
+  // Load partners sau khi có location
   useFocusEffect(
     useCallback(() => {
       loadPartners();
@@ -132,6 +184,26 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      <View style={styles.locationCard}>
+        <View style={styles.locationContent}>
+          <Text style={styles.locationIcon}>📍</Text>
+          {currentLocation ? (
+            <Text style={styles.locationText}>{currentLocation.address}</Text>
+          ) : (
+            <Pressable onPress={requestLocation}>
+              <Text style={styles.locationRequestText}>
+                Nhấn để cập nhật vị trí của bạn
+              </Text>
+            </Pressable>
+          )}
+        </View>
+        {!currentLocation && (
+          <Pressable style={styles.locationBtn} onPress={requestLocation}>
+            <Text style={styles.locationBtnText}>📍 Cập nhật</Text>
+          </Pressable>
+        )}
+      </View>
+
       <View style={styles.quickRow}>
         <Pressable
           style={styles.quickCard}
@@ -162,7 +234,7 @@ export default function HomeScreen() {
             </Text>
           )}
         </View>
-        
+
         {partnersLoading ? (
           <View style={styles.partnerLoadingCard}>
             <ActivityIndicator color="#ff4d4d" />
@@ -177,7 +249,9 @@ export default function HomeScreen() {
           </View>
         ) : partners.length === 0 ? (
           <View style={styles.partnerEmptyCard}>
-            <Text style={styles.partnerEmptyText}>Chưa có partner nào gần bạn</Text>
+            <Text style={styles.partnerEmptyText}>
+              Chưa có partner nào gần bạn
+            </Text>
           </View>
         ) : (
           <ScrollView
@@ -204,9 +278,10 @@ export default function HomeScreen() {
                     <View style={styles.partnerCardContent}>
                       <View style={styles.partnerAvatar}>
                         {p.avatar ? (
-                          <Text style={styles.partnerAvatarText}>
-                            {p.name.charAt(0)}
-                          </Text>
+                          <Image
+                            source={{ uri: p.avatar }}
+                            style={styles.partnerAvatarImage}
+                          />
                         ) : (
                           <Text style={styles.partnerAvatarText}>
                             {p.name.charAt(0)}
@@ -235,10 +310,15 @@ export default function HomeScreen() {
                       <Pressable
                         style={styles.partnerBtnProfile}
                         onPress={() =>
-                          router.push({ pathname: "/profile", params: { id: p.id } })
+                          router.push({
+                            pathname: "/profile",
+                            params: { id: p.id },
+                          })
                         }
                       >
-                        <Text style={styles.partnerBtnProfileText}>👤 Profile</Text>
+                        <Text style={styles.partnerBtnProfileText}>
+                          👤 Profile
+                        </Text>
                       </Pressable>
                     </View>
                   </View>
@@ -250,7 +330,15 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Trận đấu sắp diễn ra</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Trận đấu sắp diễn ra</Text>
+          {!matchesLoading && matches.length > 0 && (
+            <Pressable onPress={() => router.push("/match")}>
+              <Text style={styles.seeAllText}>Xem tất cả</Text>
+            </Pressable>
+          )}
+        </View>
+
         {matchesLoading ? (
           <View style={styles.matchesLoading}>
             <ActivityIndicator color="#ff4d4f" />
@@ -264,35 +352,101 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         ) : matches.length === 0 ? (
-          <Text style={styles.matchesEmpty}>
-            Chưa có trận nào. Tạo trận mới để bắt đầu.
-          </Text>
+          <View style={styles.matchesEmptyCard}>
+            <Text style={styles.matchesEmptyIcon}>🏟️</Text>
+            <Text style={styles.matchesEmptyTitle}>Chưa có trận nào</Text>
+            <Text style={styles.matchesEmptySubtitle}>
+              Tạo trận mới để bắt đầu
+            </Text>
+            <Pressable
+              style={styles.matchesEmptyBtn}
+              onPress={() => router.push("/match/create-match")}
+            >
+              <Text style={styles.matchesEmptyBtnText}>+ Tạo trận</Text>
+            </Pressable>
+          </View>
         ) : (
-          matches.map((m) => {
-            const cur = Number(m.currentPlayers ?? 0);
-            const playersStr = `${cur}/${m.maxPlayers}`;
-            return (
-              <Pressable
-                key={m.id}
-                style={styles.matchCard}
-                onPress={() =>
-                  router.push({ pathname: "/match", params: { id: m.id } })
-                }
-              >
-                <View style={styles.matchHeaderRow}>
-                  <Text style={styles.matchTitle}>{m.title}</Text>
-                  <Text style={styles.matchSport}>{m.sport}</Text>
-                </View>
-                <Text style={styles.matchMeta}>{m.location}</Text>
-                <Text style={styles.matchMeta}>
-                  {formatMatchListSubtitle(m)}
-                </Text>
-                <Text style={styles.matchPlayers}>
-                  Người chơi: {playersStr}
-                </Text>
-              </Pressable>
-            );
-          })
+          <View style={styles.matchesList}>
+            {matches.slice(0, 5).map((m) => {
+              const cur = Number(m.currentPlayers ?? 0);
+              const max = Number(m.maxPlayers);
+              const pct = max > 0 ? Math.min(1, cur / max) : 0;
+              const hostAvatar = resolveAvatarUrl(m.host?.avatar);
+              const hostName = m.host?.name || m.host?.username || "Người tổ chức";
+              return (
+                <Pressable
+                  key={m.id}
+                  style={styles.matchCard}
+                  onPress={() =>
+                    router.push({ pathname: "/match", params: { id: m.id } })
+                  }
+                >
+                  {/* Left: Sport emoji + avatar */}
+                  <View style={styles.matchCardLeft}>
+                    <View style={styles.matchSportBadge}>
+                      <Text style={styles.matchSportEmoji}>
+                        {getSportEmoji(m.sport)}
+                      </Text>
+                    </View>
+                    {hostAvatar ? (
+                      <Image
+                        source={{ uri: hostAvatar }}
+                        style={styles.matchHostAvatar}
+                      />
+                    ) : (
+                      <View style={styles.matchHostAvatarFallback}>
+                        <Text style={styles.matchHostAvatarText}>
+                          {hostName.charAt(0)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Center: Info */}
+                  <View style={styles.matchCardCenter}>
+                    <Text style={styles.matchTitle} numberOfLines={1}>
+                      {m.title}
+                    </Text>
+                    <View style={styles.matchMetaRow}>
+                      <Text style={styles.matchMetaIcon}>📍</Text>
+                      <Text style={styles.matchMetaText} numberOfLines={1}>
+                        {m.location}
+                      </Text>
+                    </View>
+                    <View style={styles.matchMetaRow}>
+                      <Text style={styles.matchMetaIcon}>🕐</Text>
+                      <Text style={styles.matchMetaText}>
+                        {m.time} • {formatDateVi(m.date)}
+                      </Text>
+                    </View>
+                    <View style={styles.matchHostRow}>
+                      <Text style={styles.matchHostLabel}>Host: </Text>
+                      <Text style={styles.matchHostName}>{hostName}</Text>
+                    </View>
+                  </View>
+
+                  {/* Right: Player progress */}
+                  <View style={styles.matchCardRight}>
+                    <Text style={styles.matchSportBadge2}>{m.sport}</Text>
+                    <View style={styles.matchPlayerProgress}>
+                      <Text style={styles.matchPlayerCount}>
+                        {cur}/{max}
+                      </Text>
+                      <View style={styles.matchProgressBarBg}>
+                        <View
+                          style={[
+                            styles.matchProgressBarFill,
+                            { width: `${pct * 100}%` },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                    <Text style={styles.matchPlayerLabel}>người chơi</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         )}
       </View>
     </ScrollView>
@@ -380,6 +534,46 @@ const styles = StyleSheet.create({
     color: "#ff4d4f",
     fontWeight: "600",
     fontSize: 14,
+  },
+  locationCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  locationContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 8,
+  },
+  locationIcon: {
+    fontSize: 18,
+  },
+  locationText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
+  },
+  locationRequestText: {
+    color: "#888888",
+    fontSize: 13,
+  },
+  locationBtn: {
+    backgroundColor: "#ff4d4f",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginLeft: 12,
+  },
+  locationBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
   },
   statsRow: {
     flexDirection: "row",
@@ -475,6 +669,11 @@ const styles = StyleSheet.create({
     color: "#ff4d4d",
     fontWeight: "700",
     fontSize: 36,
+  },
+  partnerAvatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   partnerMain: {
     flex: 1,
@@ -847,43 +1046,182 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     alignSelf: "center",
   },
-  matchCard: {
-    backgroundColor: "#111111",
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 10,
-  },
-  matchHeaderRow: {
+  // Matches section
+  sectionHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 2,
+    marginBottom: 14,
+  },
+  seeAllText: {
+    color: "#ff4d4f",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  matchesList: {
+    gap: 10,
+  },
+  matchCard: {
+    backgroundColor: "#111111",
+    borderRadius: 18,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#1e1e1e",
+  },
+  matchCardLeft: {
+    alignItems: "center",
+    gap: 6,
+  },
+  matchSportBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#1a1a1a",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#222222",
+  },
+  matchSportEmoji: {
+    fontSize: 22,
+  },
+  matchHostAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#2a2a2a",
+  },
+  matchHostAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#1a1a1a",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#ff4d4f44",
+  },
+  matchHostAvatarText: {
+    color: "#ff4d4f",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  matchCardCenter: {
+    flex: 1,
+    gap: 3,
   },
   matchTitle: {
     color: "#ffffff",
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
+    marginBottom: 1,
+  },
+  matchMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  matchMetaIcon: {
+    fontSize: 11,
+  },
+  matchMetaText: {
+    color: "#888888",
+    fontSize: 12,
     flex: 1,
-    marginRight: 8,
   },
-  matchSport: {
-    color: "#ffb3b3",
-    fontSize: 12,
-    fontWeight: "500",
+  matchHostRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
   },
-  matchMeta: {
-    color: "#aaaaaa",
-    fontSize: 12,
+  matchHostLabel: {
+    color: "#666666",
+    fontSize: 11,
   },
-  matchPlayers: {
-    marginTop: 4,
+  matchHostName: {
+    color: "#ff4d4f",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  matchCardRight: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  matchSportBadge2: {
+    color: "#ff4d4f",
+    fontSize: 11,
+    fontWeight: "600",
+    backgroundColor: "#ff4d4f18",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  matchPlayerProgress: {
+    alignItems: "center",
+    gap: 4,
+  },
+  matchPlayerCount: {
     color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "500",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  matchProgressBarBg: {
+    width: 48,
+    height: 4,
+    backgroundColor: "#2a2a2a",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  matchProgressBarFill: {
+    height: "100%",
+    backgroundColor: "#ff4d4f",
+    borderRadius: 2,
+  },
+  matchPlayerLabel: {
+    color: "#666666",
+    fontSize: 10,
+  },
+  matchesEmptyCard: {
+    backgroundColor: "#111111",
+    borderRadius: 20,
+    paddingVertical: 28,
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#1e1e1e",
+  },
+  matchesEmptyIcon: {
+    fontSize: 32,
+    marginBottom: 4,
+  },
+  matchesEmptyTitle: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  matchesEmptySubtitle: {
+    color: "#666666",
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  matchesEmptyBtn: {
+    backgroundColor: "#ff4d4f",
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+  matchesEmptyBtnText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "600",
   },
   matchesLoading: {
-    paddingVertical: 16,
+    paddingVertical: 24,
     alignItems: "center",
     gap: 8,
   },
@@ -911,10 +1249,5 @@ const styles = StyleSheet.create({
     color: "#ff4d4f",
     fontSize: 13,
     fontWeight: "600",
-  },
-  matchesEmpty: {
-    color: "#888",
-    fontSize: 13,
-    lineHeight: 20,
   },
 });

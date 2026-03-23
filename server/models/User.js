@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema(
     avatar: { type: String },
     stats: {
       matchesPlayed: { type: Number, default: 0 },
+      matchesWon: { type: Number, default: 0 },
       winRate: { type: Number, default: 0 },
       hoursActive: { type: Number, default: 0 },
       followers: { type: Number, default: 0 },

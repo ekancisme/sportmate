@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppAlert } from '@/hooks/useAppAlert';
 import {
   fetchMatchById,
   formatDateVi,
@@ -57,9 +57,10 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 }
 
 export default function MatchDetailScreen() {
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; refresh?: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { show, Alert: AppAlertNode } = useAppAlert();
   const [baseMatch, setBaseMatch] = useState<MatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -96,7 +97,7 @@ export default function MatchDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [params.id, user?.id]);
+  }, [params.id, params.refresh, user?.id]);
 
   const match = baseMatch ?? undefined;
 
@@ -140,6 +141,7 @@ export default function MatchDetailScreen() {
   const isFavorite = favorites[match.id] ?? false;
   const isJoined = Boolean(match.viewerJoined);
   const spotsLeft = Math.max(0, match.maxPlayers - match.currentPlayers);
+  const matchStatus = match.status ?? 'active';
   const isHost = Boolean(user?.id && match.hostId && user.id === match.hostId);
 
   const toggleFavorite = () => {
@@ -159,17 +161,54 @@ export default function MatchDetailScreen() {
 
   const toggleJoin = async () => {
     if (!user?.id) {
-      Alert.alert('Đăng nhập', 'Vui lòng đăng nhập để tham gia trận.');
+      show('Đăng nhập', 'Vui lòng đăng nhập để tham gia trận.', { variant: 'info' });
+      return;
+    }
+    if (matchStatus === 'finished') {
+      show('Trận đã kết thúc', 'Bạn không thể tham gia hoặc rời trận này nữa.', {
+        variant: 'info',
+      });
+      return;
+    }
+    if (matchStatus === 'cancelled') {
+      show('Trận đã bị hủy', 'Bạn không thể tham gia hoặc rời trận này nữa.', {
+        variant: 'info',
+      });
+      return;
+    }
+    if (isJoined) {
+      show('Xác nhận rời trận', `Bạn có chắc muốn hủy tham gia "${match.title}" không?`, {
+        variant: 'info',
+        confirmLabel: 'Rời trận',
+        cancelLabel: 'Hủy',
+        onConfirm: () => {
+          void (async () => {
+            setJoinBusy(true);
+            try {
+              const raw = await leaveMatch(match.id, user.id);
+              setBaseMatch(mapApiMatchToDetail(raw));
+            } catch (e) {
+              show(
+                'Lỗi',
+                e instanceof Error ? e.message : 'Thao tác thất bại',
+                { variant: 'error' },
+              );
+            } finally {
+              setJoinBusy(false);
+            }
+          })();
+        },
+      });
       return;
     }
     setJoinBusy(true);
     try {
-      const raw = isJoined
-        ? await leaveMatch(match.id, user.id)
-        : await joinMatch(match.id, user.id);
+      const raw = await joinMatch(match.id, user.id);
       setBaseMatch(mapApiMatchToDetail(raw));
     } catch (e) {
-      Alert.alert('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại');
+      show('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại', {
+        variant: 'error',
+      });
     } finally {
       setJoinBusy(false);
     }
@@ -279,17 +318,23 @@ export default function MatchDetailScreen() {
             <Text style={styles.statusLabel}>Tình trạng</Text>
             <View style={styles.statusBadge}>
               <Text style={styles.statusBadgeText}>
-                {spotsLeft > 0 ? `${spotsLeft} chỗ trống` : 'Đã đủ người'}
+                {matchStatus === 'active'
+                  ? spotsLeft > 0
+                    ? `${spotsLeft} chỗ trống`
+                    : 'Đã đủ người'
+                  : matchStatus === 'finished'
+                    ? 'Đã kết thúc'
+                    : 'Đã hủy'}
               </Text>
             </View>
             <Pressable
               onPress={toggleJoin}
-              disabled={joinBusy || (!isJoined && spotsLeft <= 0)}
+              disabled={joinBusy || matchStatus !== 'active' || (!isJoined && spotsLeft <= 0)}
               style={({ pressed }) => [
                 styles.joinCta,
                 isJoined && styles.joinCtaOutline,
                 (pressed || joinBusy) && styles.pressed,
-                joinBusy && styles.joinCtaDisabled,
+                (joinBusy || matchStatus !== 'active') && styles.joinCtaDisabled,
               ]}>
               {joinBusy ? (
                 <ActivityIndicator color="#fff" />
@@ -300,6 +345,26 @@ export default function MatchDetailScreen() {
               )}
             </Pressable>
           </View>
+
+          {matchStatus === 'finished' ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Người thắng</Text>
+              <Text style={styles.bodyText}>
+                {match.winners && match.winners.length > 0
+                  ? match.winners
+                      .map((wid) => match.participants.find((p) => p.id === wid)?.name || wid)
+                      .join(', ')
+                  : 'Chưa được chọn.'}
+              </Text>
+            </View>
+          ) : null}
+
+          {matchStatus === 'cancelled' ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Lý do hủy trận</Text>
+              <Text style={styles.bodyText}>{match.cancelReason || '—'}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Người Tổ Chức</Text>
@@ -461,6 +526,7 @@ export default function MatchDetailScreen() {
           </View>
         </View>
       </ScrollView>
+      {AppAlertNode}
     </View>
   );
 }
@@ -746,7 +812,7 @@ const styles = StyleSheet.create({
     color: PRIMARY,
   },
   joinCtaDisabled: {
-    opacity: 0.7,
+    opacity: 0.45,
   },
   orgRow: {
     flexDirection: 'row',

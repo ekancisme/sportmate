@@ -1,9 +1,11 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { fetchMyMatches, formatDateVi, type ApiMatch } from '@/lib/matchApi';
 
 type UserSport = {
   name: string;
@@ -42,7 +44,6 @@ function getApiBaseUrl() {
 
   const hostUri =
     Constants.expoConfig?.hostUri ||
-    // @ts-expect-error support older expo manifest
     Constants.manifest?.hostUri;
 
   if (hostUri) {
@@ -62,10 +63,10 @@ const EMPTY_PROFILE: UserProfile = {
   phone: '',
   avatar: '',
   stats: {
-    matchesPlayed: 124,
-    winRate: 62,
-    hoursActive: 340,
-    followers: 89,
+    matchesPlayed: 0,
+    winRate: 0,
+    hoursActive: 0,
+    followers: 0,
   },
   sports: [],
   schedule: [],
@@ -75,6 +76,10 @@ export default function MyProfile() {
   const { logout, user: authUser } = useAuth();
   const apiBase = getApiBaseUrl();
   const [user, setUser] = useState<UserProfile>(EMPTY_PROFILE);
+
+  const [myMatches, setMyMatches] = useState<ApiMatch[]>([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesErr, setMatchesErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authUser) return;
@@ -94,21 +99,55 @@ export default function MyProfile() {
         followers: authUser.stats?.followers ?? 24,
       },
       sports:
-        authUser.sports && authUser.sports.length
-          ? authUser.sports
-          : [
-              { name: 'Football', level: 'Intermediate' },
-              { name: 'Badminton', level: 'Advanced' },
-            ],
+        authUser.sports && authUser.sports.length ? authUser.sports : [],
       schedule:
-        authUser.schedule && authUser.schedule.length
-          ? authUser.schedule
-          : [
-              { day: 'Thứ 3', time: '19:00', activity: 'Đá bóng giao hữu' },
-              { day: 'Thứ 5', time: '20:00', activity: 'Cầu lông đôi' },
-            ],
+        (authUser.schedule && authUser.schedule.length ? authUser.schedule : []).map(
+          (it) => ({
+            day: it.day,
+            time: it.time ?? '',
+            activity: it.activity,
+          }),
+        ),
     });
   }, [authUser]);
+
+  useEffect(() => {
+    async function loadMatches() {
+      if (!authUser?.id) {
+        setMyMatches([]);
+        return;
+      }
+
+      setMatchesLoading(true);
+      setMatchesErr(null);
+
+      try {
+        const rows = await fetchMyMatches(authUser.id);
+        setMyMatches(rows);
+
+        // Tính lại số trận đã chơi & tỷ lệ thắng dựa trên các trận finished
+        const finished = rows.filter((m) => m.status === 'finished');
+        const matchesPlayed = finished.length;
+        const won = finished.filter((m) => (m.winners ?? []).includes(authUser.id)).length;
+        const winRate = matchesPlayed > 0 ? Math.round((won / matchesPlayed) * 100) : 0;
+
+        setUser((prev) => ({
+          ...prev,
+          stats: {
+            ...prev.stats,
+            matchesPlayed,
+            winRate,
+          },
+        }));
+      } catch (e) {
+        setMatchesErr(e instanceof Error ? e.message : 'Không tải được trận của bạn');
+      } finally {
+        setMatchesLoading(false);
+      }
+    }
+
+    void loadMatches();
+  }, [authUser?.id]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -135,9 +174,14 @@ export default function MyProfile() {
         </View>
 
         <Text style={styles.profileName}>{user.name}</Text>
-        <Text style={styles.profileRole}>SportMate player</Text>
-        <Pressable onPress={() => router.push('/my-profile/edit')}>
-          <Text style={styles.profileLink}>Change profile</Text>
+        <Text style={styles.profileRole}>Người chơi SportMate</Text>
+        <Pressable
+          onPress={() => router.push('/my-profile/edit')}
+          style={styles.changeProfileBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Chỉnh sửa hồ sơ"
+        >
+          <Ionicons name="settings" size={22} color="#ff4d4f" />
         </Pressable>
 
         <View style={styles.chipGroup}>
@@ -152,19 +196,19 @@ export default function MyProfile() {
       </View>
 
       <View style={styles.statsRow}>
-        <Stat label="Matches" value={user.stats.matchesPlayed} />
-        <Stat label="Win rate (%)" value={user.stats.winRate} />
-        <Stat label="Hours" value={user.stats.hoursActive} />
-        <Stat label="Followers" value={user.stats.followers} />
+        <Stat label="Trận đấu" value={user.stats.matchesPlayed} />
+        <Stat label="Tỷ lệ thắng (%)" value={user.stats.winRate} />
+        <Stat label="Giờ hoạt động" value={user.stats.hoursActive} />
+        <Stat label="Người theo dõi" value={user.stats.followers} />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
+        <Text style={styles.sectionTitle}>Giới thiệu</Text>
         <Text style={styles.aboutText}>{user.bio}</Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Schedule</Text>
+        <Text style={styles.sectionTitle}>Lịch tập luyện</Text>
         <View style={styles.scheduleGrid}>
           {user.schedule.map((s, idx) => (
             <View key={`${s.day}-${idx}`} style={styles.scheduleCard}>
@@ -179,7 +223,7 @@ export default function MyProfile() {
       <View style={styles.actionsRow}>
         <Pressable
           style={[styles.secondaryBtn, styles.actionBtn]}
-          onPress={() => router.push('/match/my-matches')}>
+          onPress={() => router.push('/(tabs)/my-matches')}>
           <Text style={styles.secondaryBtnText}>Trận của tôi</Text>
         </Pressable>
         <Pressable
@@ -315,6 +359,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderRadius: 28,
     backgroundColor: '#101010',
+    position: 'relative',
   },
   avatarWrapper: {
     marginBottom: 12,
@@ -372,6 +417,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textDecorationLine: 'underline',
   },
+  changeProfileBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
   chipGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -400,6 +452,67 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 8,
+  },
+  mutedText: {
+    color: '#aaa',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  errorText: {
+    color: '#ff8888',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  matchPreviewCard: {
+    marginBottom: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: '#111',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  pressedCard: {
+    opacity: 0.85,
+  },
+  matchPreviewTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 2,
+  },
+  matchPreviewTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  matchPreviewMeta: {
+    color: '#aaa',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  roleBadgeHost: {
+    backgroundColor: 'rgba(255, 77, 79, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 77, 79, 0.45)',
+  },
+  roleBadgeJoin: {
+    backgroundColor: 'rgba(120, 180, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(120, 180, 255, 0.4)',
+  },
+  roleBadgeText: {
+    color: '#ccc',
+    fontSize: 11,
+    fontWeight: '700',
   },
   aboutText: {
     color: '#dddddd',
