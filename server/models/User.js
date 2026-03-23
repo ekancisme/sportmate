@@ -31,6 +31,8 @@ const userSchema = new mongoose.Schema(
         day: { type: String, required: true },
         time: { type: String },
         activity: { type: String, required: true },
+        /** ID trận đấu liên kết (nếu có) — dùng để xóa khi hủy tham gia */
+        matchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Match', default: null },
       },
     ],
   },
