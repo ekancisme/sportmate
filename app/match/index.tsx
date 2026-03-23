@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppAlert } from '@/hooks/useAppAlert';
 import {
   fetchMatchById,
   formatDateVi,
@@ -60,6 +60,7 @@ export default function MatchDetailScreen() {
   const params = useLocalSearchParams<{ id?: string; refresh?: string }>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { show, Alert: AppAlertNode } = useAppAlert();
   const [baseMatch, setBaseMatch] = useState<MatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -160,25 +161,54 @@ export default function MatchDetailScreen() {
 
   const toggleJoin = async () => {
     if (!user?.id) {
-      Alert.alert('Đăng nhập', 'Vui lòng đăng nhập để tham gia trận.');
+      show('Đăng nhập', 'Vui lòng đăng nhập để tham gia trận.', { variant: 'info' });
       return;
     }
     if (matchStatus === 'finished') {
-      Alert.alert('Trận đã kết thúc', 'Bạn không thể tham gia hoặc rời trận này nữa.');
+      show('Trận đã kết thúc', 'Bạn không thể tham gia hoặc rời trận này nữa.', {
+        variant: 'info',
+      });
       return;
     }
     if (matchStatus === 'cancelled') {
-      Alert.alert('Trận đã bị hủy', 'Bạn không thể tham gia hoặc rời trận này nữa.');
+      show('Trận đã bị hủy', 'Bạn không thể tham gia hoặc rời trận này nữa.', {
+        variant: 'info',
+      });
+      return;
+    }
+    if (isJoined) {
+      show('Xác nhận rời trận', `Bạn có chắc muốn hủy tham gia "${match.title}" không?`, {
+        variant: 'info',
+        confirmLabel: 'Rời trận',
+        cancelLabel: 'Hủy',
+        onConfirm: () => {
+          void (async () => {
+            setJoinBusy(true);
+            try {
+              const raw = await leaveMatch(match.id, user.id);
+              setBaseMatch(mapApiMatchToDetail(raw));
+            } catch (e) {
+              show(
+                'Lỗi',
+                e instanceof Error ? e.message : 'Thao tác thất bại',
+                { variant: 'error' },
+              );
+            } finally {
+              setJoinBusy(false);
+            }
+          })();
+        },
+      });
       return;
     }
     setJoinBusy(true);
     try {
-      const raw = isJoined
-        ? await leaveMatch(match.id, user.id)
-        : await joinMatch(match.id, user.id);
+      const raw = await joinMatch(match.id, user.id);
       setBaseMatch(mapApiMatchToDetail(raw));
     } catch (e) {
-      Alert.alert('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại');
+      show('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại', {
+        variant: 'error',
+      });
     } finally {
       setJoinBusy(false);
     }
@@ -496,6 +526,7 @@ export default function MatchDetailScreen() {
           </View>
         </View>
       </ScrollView>
+      {AppAlertNode}
     </View>
   );
 }
