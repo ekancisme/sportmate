@@ -73,7 +73,7 @@ const EMPTY_PROFILE: UserProfile = {
 };
 
 export default function MyProfile() {
-  const { logout, user: authUser } = useAuth();
+  const { logout, user: authUser, role } = useAuth();
   const apiBase = getApiBaseUrl();
   const [user, setUser] = useState<UserProfile>(EMPTY_PROFILE);
 
@@ -175,6 +175,16 @@ export default function MyProfile() {
 
         <Text style={styles.profileName}>{user.name}</Text>
         <Text style={styles.profileRole}>Người chơi SportMate</Text>
+
+        {role === 'admin' ? (
+          <Pressable
+            onPress={() => router.push('/admin')}
+            style={({ pressed }) => [styles.adminManageBtn, pressed && styles.adminManageBtnPressed]}>
+            <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            <Text style={styles.adminManageBtnText}>Trang Quản Lý</Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           onPress={() => router.push('/my-profile/edit')}
           style={styles.changeProfileBtn}
@@ -423,6 +433,26 @@ const styles = StyleSheet.create({
     right: 14,
     paddingHorizontal: 8,
     paddingVertical: 6,
+  },
+  adminManageBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,79,0.6)',
+    backgroundColor: 'rgba(255,77,79,0.12)',
+  },
+  adminManageBtnPressed: {
+    opacity: 0.85,
+  },
+  adminManageBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   chipGroup: {
     flexDirection: 'row',
