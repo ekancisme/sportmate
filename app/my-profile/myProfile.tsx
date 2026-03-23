@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchMyMatches, formatDateVi, type ApiMatch } from '@/lib/matchApi';
@@ -173,9 +174,14 @@ export default function MyProfile() {
         </View>
 
         <Text style={styles.profileName}>{user.name}</Text>
-        <Text style={styles.profileRole}>SportMate player</Text>
-        <Pressable onPress={() => router.push('/my-profile/edit')}>
-          <Text style={styles.profileLink}>Change profile</Text>
+        <Text style={styles.profileRole}>Người chơi SportMate</Text>
+        <Pressable
+          onPress={() => router.push('/my-profile/edit')}
+          style={styles.changeProfileBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Chỉnh sửa hồ sơ"
+        >
+          <Ionicons name="settings" size={22} color="#ff4d4f" />
         </Pressable>
 
         <View style={styles.chipGroup}>
@@ -190,19 +196,19 @@ export default function MyProfile() {
       </View>
 
       <View style={styles.statsRow}>
-        <Stat label="Matches" value={user.stats.matchesPlayed} />
-        <Stat label="Win rate (%)" value={user.stats.winRate} />
-        <Stat label="Hours" value={user.stats.hoursActive} />
-        <Stat label="Followers" value={user.stats.followers} />
+        <Stat label="Trận đấu" value={user.stats.matchesPlayed} />
+        <Stat label="Tỷ lệ thắng (%)" value={user.stats.winRate} />
+        <Stat label="Giờ hoạt động" value={user.stats.hoursActive} />
+        <Stat label="Người theo dõi" value={user.stats.followers} />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
+        <Text style={styles.sectionTitle}>Giới thiệu</Text>
         <Text style={styles.aboutText}>{user.bio}</Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Schedule</Text>
+        <Text style={styles.sectionTitle}>Lịch tập luyện</Text>
         <View style={styles.scheduleGrid}>
           {user.schedule.map((s, idx) => (
             <View key={`${s.day}-${idx}`} style={styles.scheduleCard}>
@@ -353,6 +359,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderRadius: 28,
     backgroundColor: '#101010',
+    position: 'relative',
   },
   avatarWrapper: {
     marginBottom: 12,
@@ -409,6 +416,13 @@ const styles = StyleSheet.create({
     color: '#ff4d4f',
     fontSize: 12,
     textDecorationLine: 'underline',
+  },
+  changeProfileBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   chipGroup: {
     flexDirection: 'row',

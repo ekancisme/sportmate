@@ -181,7 +181,7 @@ export default function EditProfileScreen() {
           <Pressable style={styles.headerBtn} onPress={() => router.back()}>
             <Text style={styles.headerBtnText}>←</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Edit profile</Text>
+          <Text style={styles.headerTitle}>Chỉnh sửa hồ sơ</Text>
           <View style={styles.headerBtnPlaceholder} />
         </View>
 
@@ -228,7 +228,7 @@ export default function EditProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Giới thiệu</Text>
           <EditField
-            label="About"
+            label="Giới thiệu"
             value={profile.bio}
             multiline
             onChangeText={(text) => handleChange('bio', text)}
@@ -267,7 +267,7 @@ export default function EditProfileScreen() {
                     return { ...prev, sports: next };
                   });
                 }}
-                placeholder="Level"
+                placeholder="Trình độ"
                 placeholderTextColor="#777"
               />
               <Pressable
