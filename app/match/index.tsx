@@ -21,6 +21,7 @@ import {
   fetchMatchById,
   formatDateVi,
   joinMatch,
+  checkJoinMatch,
   leaveMatch,
   mapApiMatchToDetail,
   type MatchDetail,
@@ -201,16 +202,56 @@ export default function MatchDetailScreen() {
       });
       return;
     }
-    setJoinBusy(true);
+
+    const doJoin = async () => {
+      setJoinBusy(true);
+      try {
+        const raw = await joinMatch(match.id, user.id);
+        setBaseMatch(mapApiMatchToDetail(raw));
+      } catch (e) {
+        show('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại', {
+          variant: 'error',
+        });
+      } finally {
+        setJoinBusy(false);
+      }
+    };
+
     try {
-      const raw = await joinMatch(match.id, user.id);
-      setBaseMatch(mapApiMatchToDetail(raw));
+      const check = await checkJoinMatch(match.id, user.id);
+
+      if (!check.allow && check.reason === 'overlap') {
+        show(
+          'Trùng khung giờ',
+          'Bạn đã có trận khác trùng khung giờ trong ngày này. Không thể tham gia.',
+          { variant: 'error' },
+        );
+        return;
+      }
+
+      if (check.reason === 'hasOtherMatch') {
+        show(
+          'Trong ngày hôm nay',
+          'Bạn đang có trận khác (không trùng giờ). Bạn có muốn tham gia trận này không?',
+          {
+            variant: 'info',
+            confirmLabel: 'Tham gia',
+            cancelLabel: 'Hủy',
+            onConfirm: () => {
+              void doJoin();
+            },
+          },
+        );
+        return;
+      }
+
+      await doJoin();
     } catch (e) {
-      show('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại', {
-        variant: 'error',
-      });
-    } finally {
-      setJoinBusy(false);
+      show(
+        'Lỗi',
+        e instanceof Error ? e.message : 'Không thể kiểm tra lịch tham gia',
+        { variant: 'error' },
+      );
     }
   };
 
@@ -234,6 +275,18 @@ export default function MatchDetailScreen() {
               <Text style={styles.heroSubtitle}>{match.sportLabelVi}</Text>
             </View>
             <View style={styles.heroActions}>
+              {isHost ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: '/match/create-match',
+                      params: { editId: match.id },
+                    })
+                  }
+                  style={({ pressed }) => [styles.iconBox, pressed && styles.pressed]}>
+                  <Ionicons name="create-outline" size={22} color={PRIMARY} />
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={toggleFavorite}
                 style={({ pressed }) => [styles.iconBox, pressed && styles.pressed]}>
@@ -298,21 +351,6 @@ export default function MatchDetailScreen() {
               </View>
             </View>
           </View>
-
-          {isHost ? (
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: '/match/create-match',
-                  params: { editId: match.id },
-                })
-              }
-              style={({ pressed }) => [styles.hostEditRow, pressed && styles.pressed]}>
-              <Ionicons name="create-outline" size={22} color={PRIMARY} />
-              <Text style={styles.hostEditText}>Chỉnh sửa trận đấu</Text>
-              <Ionicons name="chevron-forward" size={20} color={TEXT_DIM} />
-            </Pressable>
-          ) : null}
 
           <View style={styles.card}>
             <Text style={styles.statusLabel}>Tình trạng</Text>

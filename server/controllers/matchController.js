@@ -3,6 +3,40 @@ const User = require('../models/User');
 const Match = require('../models/Match');
 const { matchJsonWithHost } = require('../utils/matchJson');
 
+function parseTimeToMinutesRange(timeStr) {
+  const s = String(timeStr || '').trim();
+  if (!s) return null;
+
+  const range = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/.exec(s);
+  if (range) {
+    const startH = Number(range[1]);
+    const startM = Number(range[2]);
+    const endH = Number(range[3]);
+    const endM = Number(range[4]);
+    const start = startH * 60 + startM;
+    const end = endH * 60 + endM;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+    return { start, end };
+  }
+
+  const one = /^(\d{1,2}):(\d{2})$/.exec(s);
+  if (one) {
+    const startH = Number(one[1]);
+    const startM = Number(one[2]);
+    const start = startH * 60 + startM;
+    const end = start + 60;
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { start, end };
+  }
+
+  return null;
+}
+
+function rangesOverlap(a, b) {
+  if (!a || !b) return false;
+  return a.start < b.end && b.start < a.end;
+}
+
 async function listMatches(_req, res) {
   try {
     const matches = await Match.find()
@@ -68,6 +102,86 @@ async function getMatch(req, res) {
   }
 }
 
+async function checkJoinMatch(req, res) {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID trận không hợp lệ' });
+    }
+    if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+      return res.status(400).json({ error: 'Thiếu hoặc sai userId' });
+    }
+
+    const doc = await Match.findById(id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Không tìm thấy trận' });
+    }
+    if ((doc.status ?? 'active') !== 'active') {
+      return res.status(400).json({ error: 'Trận này không còn mở để tham gia' });
+    }
+
+    const uid = new mongoose.Types.ObjectId(String(userId));
+    const docTime = parseTimeToMinutesRange(doc.time);
+
+    const alreadyJoined = Array.isArray(doc.participantIds)
+      ? doc.participantIds.some((p) => p.equals(uid))
+      : false;
+    if (alreadyJoined) {
+      return res.json({
+        allow: true,
+        reason: 'none',
+        alreadyJoined: true,
+        conflicts: [],
+      });
+    }
+
+    const conflicts = await Match.find({
+      _id: { $ne: doc._id },
+      date: doc.date,
+      $and: [
+        { $or: [{ status: 'active' }, { status: { $exists: false } }] },
+        { $or: [{ hostId: uid }, { participantIds: uid }] },
+      ],
+    }).select('title time');
+
+    const conflictsWithOverlap = conflicts
+      .map((m) => {
+        const mTime = parseTimeToMinutesRange(m.time);
+        return {
+          id: m._id.toString(),
+          title: m.title,
+          time: m.time,
+          overlap: rangesOverlap(docTime, mTime),
+        };
+      })
+      .filter(Boolean);
+
+    const overlapping = conflictsWithOverlap.filter((x) => x.overlap);
+    if (overlapping.length > 0) {
+      return res.json({
+        allow: false,
+        reason: 'overlap',
+        conflicts: overlapping,
+      });
+    }
+
+    if (conflictsWithOverlap.length > 0) {
+      return res.json({
+        allow: true,
+        reason: 'hasOtherMatch',
+        conflicts: conflictsWithOverlap,
+      });
+    }
+
+    return res.json({ allow: true, reason: 'none', conflicts: [] });
+  } catch (error) {
+    console.error('❌ POST /api/matches/:id/join/check', error);
+    return res.status(500).json({ error: 'Không thể kiểm tra lịch tham gia' });
+  }
+}
+
 async function joinMatch(req, res) {
   try {
     const { id } = req.params;
@@ -84,7 +198,7 @@ async function joinMatch(req, res) {
     if (!doc) {
       return res.status(404).json({ error: 'Không tìm thấy trận' });
     }
-    if (doc.status !== 'active') {
+    if ((doc.status ?? 'active') !== 'active') {
       return res.status(400).json({ error: 'Trận này không còn mở để tham gia' });
     }
 
@@ -95,6 +209,28 @@ async function joinMatch(req, res) {
     if (pids.some((p) => p.equals(uid))) {
       await doc.populate('hostId', 'name username avatar stats');
       return res.json(matchJsonWithHost(doc, { viewerUserId: String(userId) }));
+    }
+
+    // Chặn trùng khung giờ với các trận khác trong cùng ngày mà user đang liên quan (host hoặc participant).
+    const docTime = parseTimeToMinutesRange(doc.time);
+    if (docTime) {
+      const conflicts = await Match.find({
+        _id: { $ne: doc._id },
+        date: doc.date,
+        $and: [
+          { $or: [{ status: 'active' }, { status: { $exists: false } }] },
+          { $or: [{ hostId: uid }, { participantIds: uid }] },
+        ],
+      }).select('time');
+
+      const overlapFound = conflicts.some((m) =>
+        rangesOverlap(docTime, parseTimeToMinutesRange(m.time)),
+      );
+      if (overlapFound) {
+        return res.status(400).json({
+          error: 'Bạn đã có trận trùng khung giờ trong ngày này. Không thể tham gia.',
+        });
+      }
     }
 
     if (used >= doc.maxPlayers) {
@@ -129,7 +265,7 @@ async function leaveMatch(req, res) {
     if (!doc) {
       return res.status(404).json({ error: 'Không tìm thấy trận' });
     }
-    if (doc.status !== 'active') {
+    if ((doc.status ?? 'active') !== 'active') {
       return res.status(400).json({ error: 'Trận này không còn mở để rời' });
     }
 
@@ -300,6 +436,13 @@ async function patchMatch(req, res) {
         (Array.isArray(doc.winners) ? doc.winners : []).map((w) => String(w)),
       );
 
+      const docDurationHours = (() => {
+        const r = parseTimeToMinutesRange(doc.time);
+        if (!r) return 0;
+        const hours = (r.end - r.start) / 60;
+        return Math.round(hours * 10) / 10;
+      })();
+
       const participantIdSet = new Set(
         [
           ...((doc.participantIds || []).map((p) => String(p)) || []),
@@ -323,6 +466,10 @@ async function patchMatch(req, res) {
         u.stats.matchesPlayed = newPlayed;
         u.stats.matchesWon = newWon;
         u.stats.winRate = newWinRate;
+        if (docDurationHours > 0) {
+          const curHours = Number(u.stats?.hoursActive ?? 0);
+          u.stats.hoursActive = curHours + docDurationHours;
+        }
         await u.save();
       }
     }
@@ -440,6 +587,7 @@ module.exports = {
   listMatches,
   listMine,
   getMatch,
+  checkJoinMatch,
   joinMatch,
   leaveMatch,
   patchMatch,

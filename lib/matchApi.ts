@@ -294,6 +294,41 @@ export async function joinMatch(matchId: string, userId: string): Promise<ApiMat
   return data as ApiMatch;
 }
 
+export type MatchJoinConflict = {
+  id: string;
+  title?: string;
+  time: string;
+  overlap: boolean;
+};
+
+export type MatchJoinCheckResponse = {
+  allow: boolean;
+  reason: 'none' | 'hasOtherMatch' | 'overlap';
+  conflicts: MatchJoinConflict[];
+  alreadyJoined?: boolean;
+};
+
+export async function checkJoinMatch(
+  matchId: string,
+  userId: string,
+): Promise<MatchJoinCheckResponse> {
+  const base = getApiBaseUrl();
+  const res = await fetch(
+    `${base}/api/matches/${encodeURIComponent(matchId)}/join/check`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    },
+  );
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(typeof data.error === 'string' ? data.error : 'Không thể kiểm tra lịch');
+  }
+  return data as MatchJoinCheckResponse;
+}
+
 export async function leaveMatch(matchId: string, userId: string): Promise<ApiMatch> {
   const base = getApiBaseUrl();
   const res = await fetch(`${base}/api/matches/${encodeURIComponent(matchId)}/leave`, {
