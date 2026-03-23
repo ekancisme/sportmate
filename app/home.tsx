@@ -2,22 +2,22 @@ import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
 } from "react-native";
 
-import {
-  fetchMatches,
-  formatMatchListSubtitle,
-  type ApiMatch,
-} from "@/lib/matchApi";
 import { useAuth, type SuggestedPartner } from "@/contexts/AuthContext";
+import {
+    fetchMatches,
+    formatMatchListSubtitle,
+    type ApiMatch,
+} from "@/lib/matchApi";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
