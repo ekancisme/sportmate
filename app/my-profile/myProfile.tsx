@@ -57,7 +57,13 @@ const API_BASE = getApiBaseUrl();
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MyProfile() {
+<<<<<<< HEAD
   const { user: authUser, setUserFromServer, logout } = useAuth();
+=======
+  const { logout, user: authUser, role } = useAuth();
+  const apiBase = getApiBaseUrl();
+  const [user, setUser] = useState<UserProfile>(EMPTY_PROFILE);
+>>>>>>> 88f491198664bb8d70eedab35464a8c82d56dd43
 
   // ── state ──
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -209,6 +215,22 @@ export default function MyProfile() {
           <Text style={styles.pageTitle}>Hồ Sơ Của Tôi</Text>
           <Text style={styles.pageSubtitle}>Quản lý thông tin cá nhân</Text>
         </View>
+<<<<<<< HEAD
+=======
+
+        <Text style={styles.profileName}>{user.name}</Text>
+        <Text style={styles.profileRole}>Người chơi SportMate</Text>
+
+        {role === 'admin' ? (
+          <Pressable
+            onPress={() => router.push('/admin')}
+            style={({ pressed }) => [styles.adminManageBtn, pressed && styles.adminManageBtnPressed]}>
+            <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            <Text style={styles.adminManageBtnText}>Trang Quản Lý</Text>
+          </Pressable>
+        ) : null}
+
+>>>>>>> 88f491198664bb8d70eedab35464a8c82d56dd43
         <Pressable
           style={[styles.editToggleBtn, isEditing && styles.cancelBtn]}
           onPress={isEditing ? handleCancel : handleEdit}
@@ -642,7 +664,48 @@ const styles = StyleSheet.create({
     minWidth: 160,
     marginBottom: 4,
   },
+<<<<<<< HEAD
   profileRole: { color: '#aabbff', fontSize: 13 },
+=======
+  profileRole: {
+    color: '#bbbbff',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  profileLink: {
+    marginTop: 6,
+    color: '#ff4d4f',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  changeProfileBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  adminManageBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,79,0.6)',
+    backgroundColor: 'rgba(255,77,79,0.12)',
+  },
+  adminManageBtnPressed: {
+    opacity: 0.85,
+  },
+  adminManageBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+>>>>>>> 88f491198664bb8d70eedab35464a8c82d56dd43
   chipGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -7,6 +7,8 @@ const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const matchRoutes = require("./routes/matchRoutes");
 const partnerRoutes = require("./routes/partnerRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const venueRoutes = require("./routes/venueRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +42,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/matches", matchRoutes);
 app.use("/api/partners", partnerRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/venues", venueRoutes);
 
 async function start() {
   try {
