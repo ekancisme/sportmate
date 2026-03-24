@@ -9,7 +9,7 @@ export default function CourtSlotGrid({
   selectedStartTime,
   onSelect,
   readOnly = false,
-  emptyText = 'Chua co khung gio',
+  emptyText = 'Chưa có khung giờ',
 }: {
   slots: CourtAvailabilitySlot[];
   selectedStartTime?: string | null;
@@ -49,7 +49,7 @@ export default function CourtSlotGrid({
                 booked ? styles.stateBooked : styles.stateAvailable,
                 selected && styles.stateSelected,
               ]}>
-              {booked ? 'Da dat' : selected ? 'Dang chon' : 'Con trong'}
+              {booked ? 'Đã đặt' : selected ? 'Đang chọn' : 'Còn trống'}
             </Text>
           </Pressable>
         );
@@ -62,14 +62,15 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    justifyContent: 'flex-start',
+    columnGap: '3%',
+    rowGap: 12,
   },
   card: {
-    width: '30%',
-    minWidth: 96,
+    width: '31.33%',
     borderRadius: 18,
     paddingVertical: 12,
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     backgroundColor: '#141414',
     borderWidth: 1,
     borderColor: '#262626',

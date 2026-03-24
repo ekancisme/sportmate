@@ -15,7 +15,6 @@ import CourtDateStrip from '@/components/courts/CourtDateStrip';
 import CourtSlotGrid from '@/components/courts/CourtSlotGrid';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
-import { getUpcomingDateKeys } from '@/lib/courtCalendar';
 import {
   cancelCourtBooking,
   fetchCourtBookings,
@@ -24,6 +23,7 @@ import {
   type ApiCourtBooking,
   type CourtAvailabilityResponse,
 } from '@/lib/courtApi';
+import { getUpcomingDateKeys } from '@/lib/courtCalendar';
 
 const PRIMARY = '#ff4d4f';
 
@@ -47,7 +47,7 @@ export default function CourtBookingsScreen() {
 
   const loadData = useCallback(async () => {
     if (!courtId || !user?.id) {
-      setError('Thieu du lieu de xem lich dat');
+      setError('Thiếu dữ liệu để xem lịch đặt');
       setLoading(false);
       return;
     }
@@ -60,7 +60,7 @@ export default function CourtBookingsScreen() {
       setAvailability(result.availability);
       setBookings(result.bookings);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Khong tai duoc lich dat san');
+      setError(e instanceof Error ? e.message : 'Không tải được lịch đặt sân');
       setCourt(null);
       setBookings([]);
       setAvailability(null);
@@ -78,18 +78,18 @@ export default function CourtBookingsScreen() {
   const handleCancelBooking = (booking: ApiCourtBooking) => {
     if (!user?.id) return;
 
-    show('Huy lich dat', `Ban co chac muon huy lich ${booking.startTime} - ${booking.endTime}?`, {
+    show('Hủy lịch đặt', `Bạn có chắc muốn hủy lịch ${booking.startTime} - ${booking.endTime}?`, {
       variant: 'error',
-      confirmLabel: 'Huy lich',
-      cancelLabel: 'Dong',
+      confirmLabel: 'Hủy lịch',
+      cancelLabel: 'Đóng',
       onConfirm: () => {
         void (async () => {
           try {
             await cancelCourtBooking(booking.id, user.id);
-            setNotice(`Da huy lich dat ${booking.startTime} - ${booking.endTime}.`);
+            setNotice(`Đã hủy lịch đặt ${booking.startTime} - ${booking.endTime}.`);
             await loadData();
           } catch (e) {
-            show('Khong huy duoc', e instanceof Error ? e.message : 'Co loi xay ra', {
+            show('Không hủy được', e instanceof Error ? e.message : 'Có lỗi xảy ra', {
               variant: 'error',
             });
           }
@@ -102,9 +102,9 @@ export default function CourtBookingsScreen() {
     return (
       <>
         <View style={styles.centered}>
-          <Text style={styles.errorText}>Chi owner moi co the xem lich dat cua san.</Text>
+          <Text style={styles.errorText}>Chỉ owner mới có thể xem lịch đặt của sân.</Text>
           <Pressable style={styles.secondaryBtn} onPress={() => router.replace('/courts' as never)}>
-            <Text style={styles.secondaryBtnText}>Ve danh sach san</Text>
+            <Text style={styles.secondaryBtnText}>Về danh sách sân</Text>
           </Pressable>
         </View>
         {AppAlertNode}
@@ -116,7 +116,7 @@ export default function CourtBookingsScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator color={PRIMARY} />
-        <Text style={styles.loadingText}>Dang tai lich dat...</Text>
+        <Text style={styles.loadingText}>Đang tải lịch đặt...</Text>
       </View>
     );
   }
@@ -125,9 +125,9 @@ export default function CourtBookingsScreen() {
     return (
       <>
         <View style={styles.centered}>
-          <Text style={styles.errorText}>{error || 'Khong tai duoc lich dat cua san'}</Text>
+          <Text style={styles.errorText}>{error || 'Không tải được lịch đặt của sân'}</Text>
           <Pressable style={styles.secondaryBtn} onPress={() => router.back()}>
-            <Text style={styles.secondaryBtnText}>Quay lai</Text>
+            <Text style={styles.secondaryBtnText}>Quay lại</Text>
           </Pressable>
         </View>
         {AppAlertNode}
@@ -141,15 +141,15 @@ export default function CourtBookingsScreen() {
         <View style={styles.topRow}>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={22} color={PRIMARY} />
-            <Text style={styles.backText}>Quay lai</Text>
+            <Text style={styles.backText}>Quay lại</Text>
           </Pressable>
         </View>
 
         <View style={styles.headerCard}>
-          <Text style={styles.title}>Lich dat cua san</Text>
+          <Text style={styles.title}>Lịch đặt của sân</Text>
           <Text style={styles.courtName}>{court.name}</Text>
           <Text style={styles.subtitle}>
-            Theo doi slot nao da duoc dat, xem thong tin nguoi dat va chu dong huy lich khi can.
+            Theo dõi slot nào đã được đặt, xem thông tin người đặt và chủ động hủy lịch khi cần.
           </Text>
           <Text style={styles.summaryText}>{court.sportLabel} • {formatCourtPrice(court.pricePerHour)}</Text>
         </View>
@@ -162,22 +162,22 @@ export default function CourtBookingsScreen() {
         ) : null}
 
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Chon ngay xem lich</Text>
+          <Text style={styles.sectionTitle}>Chọn ngày xem lịch</Text>
           <CourtDateStrip selectedDate={selectedDate} onSelect={setSelectedDate} />
         </View>
 
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Tong quan slot trong ngay</Text>
+          <Text style={styles.sectionTitle}>Tổng quan slot trong ngày</Text>
           <Text style={styles.helperText}>
-            Slot do la da duoc dat, slot toi la chua co ai dat trong ngay ban dang xem.
+            Slot đỏ là đã được đặt, slot tối là chưa có ai đặt trong ngày bạn đang xem.
           </Text>
           <CourtSlotGrid slots={availability.slots} readOnly />
         </View>
 
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Danh sach nguoi da dat</Text>
+          <Text style={styles.sectionTitle}>Danh sách người đã đặt</Text>
           {bookings.length === 0 ? (
-            <Text style={styles.emptyText}>Chua co ai dat san trong ngay nay.</Text>
+            <Text style={styles.emptyText}>Chưa có ai đặt sân trong ngày này.</Text>
           ) : (
             bookings.map((booking) => (
               <View key={booking.id} style={styles.bookingCard}>
@@ -187,13 +187,13 @@ export default function CourtBookingsScreen() {
                     <Text style={styles.bookingName}>{booking.contactName || booking.user?.name || booking.user?.username || 'Nguoi dung SportMate'}</Text>
                   </View>
                   <Pressable style={styles.cancelBtn} onPress={() => handleCancelBooking(booking)}>
-                    <Text style={styles.cancelBtnText}>Huy lich</Text>
+                    <Text style={styles.cancelBtnText}>Hủy lịch</Text>
                   </Pressable>
                 </View>
 
                 <View style={styles.metaRow}>
                   <Ionicons name="call-outline" size={15} color={PRIMARY} />
-                  <Text style={styles.metaText}>{booking.contactPhone || booking.user?.phone || 'Dang cap nhat'}</Text>
+                  <Text style={styles.metaText}>{booking.contactPhone || booking.user?.phone || 'Đang cập nhật'}</Text>
                 </View>
                 <View style={styles.metaRow}>
                   <Ionicons name="cash-outline" size={15} color={PRIMARY} />

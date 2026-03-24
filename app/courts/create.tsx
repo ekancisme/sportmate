@@ -23,8 +23,8 @@ import {
   createCourt,
   fetchCourtById,
   resolveCourtImageUrl,
-  uploadCourtImages,
   updateCourt,
+  uploadCourtImages,
   type CourtImageAsset,
 } from '@/lib/courtApi';
 
@@ -182,28 +182,28 @@ export default function CreateCourtScreen() {
 
   const handleSubmit = async () => {
     if (role !== 'owner' || !user?.id) {
-      show('Can tai khoan owner', 'Chi owner moi co the dang hoac quan ly san.', {
+      show('Cần tài khoản owner', 'Chỉ owner mới có thể đăng hoặc quản lý sân.', {
         variant: 'error',
       });
       return;
     }
 
     if (form.name.trim().length < 2) {
-      show('Thieu thong tin', 'Ten san can it nhat 2 ky tu.', { variant: 'error' });
+      show('Thiếu thông tin', 'Tên sân cần ít nhất 2 ký tự.', { variant: 'error' });
       return;
     }
     if (!form.sportKey) {
-      show('Thieu thong tin', 'Vui long chon bo mon cua san.', { variant: 'error' });
+      show('Thiếu thông tin', 'Vui lòng chọn bộ môn của sân.', { variant: 'error' });
       return;
     }
     if (!form.address.trim()) {
-      show('Thieu thong tin', 'Vui long nhap dia chi san.', { variant: 'error' });
+      show('Thiếu thông tin', 'Vui lòng nhập địa chỉ sân.', { variant: 'error' });
       return;
     }
 
     const priceNum = form.pricePerHour.trim() ? Number(form.pricePerHour.trim()) : 0;
     if (!Number.isFinite(priceNum) || priceNum < 0) {
-      show('Gia thue san', 'Gia thue san phai la so khong am.', { variant: 'error' });
+      show('Giá thuê sân', 'Giá thuê sân phải là số không âm.', { variant: 'error' });
       return;
     }
 
@@ -238,7 +238,7 @@ export default function CreateCourtScreen() {
       setForm((prev) => ({ ...prev, images: savedCourt.images }));
       router.replace(`/courts/my-courts?notice=${isEditMode ? 'updated' : 'created'}` as never);
     } catch (error) {
-      show('Loi', error instanceof Error ? error.message : 'Khong luu duoc san', { variant: 'error' });
+      show('Lỗi', error instanceof Error ? error.message : 'Không lưu được sân', { variant: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -248,10 +248,10 @@ export default function CreateCourtScreen() {
     return (
       <>
         <View style={styles.deniedWrap}>
-          <Text style={styles.deniedTitle}>Can tai khoan owner</Text>
-          <Text style={styles.deniedText}>Chi tai khoan owner moi co the dang hoac sua san.</Text>
+          <Text style={styles.deniedTitle}>Cần tài khoản owner</Text>
+          <Text style={styles.deniedText}>Chỉ owner mới có thể đăng hoặc sửa sân.</Text>
           <Pressable style={styles.secondaryBtn} onPress={() => router.replace('/courts' as never)}>
-            <Text style={styles.secondaryBtnText}>Ve danh sach san</Text>
+            <Text style={styles.secondaryBtnText}>Về danh sách sân</Text>
           </Pressable>
         </View>
         {AppAlertNode}
@@ -263,7 +263,7 @@ export default function CreateCourtScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator color={PRIMARY} />
-        <Text style={styles.loadingText}>Dang tai san...</Text>
+        <Text style={styles.loadingText}>Đang tải sân...</Text>
       </View>
     );
   }
@@ -283,22 +283,22 @@ export default function CreateCourtScreen() {
             <Pressable style={styles.backBtn} onPress={() => router.back()}>
               <Ionicons name="chevron-back" size={22} color={PRIMARY} />
             </Pressable>
-            <Text style={styles.headerTitle}>{isEditMode ? 'Sua san' : 'Dang san moi'}</Text>
+            <Text style={styles.headerTitle}>{isEditMode ? 'Sửa sân' : 'Đăng sân mới'}</Text>
             <View style={styles.backPlaceholder} />
           </View>
 
           <Text style={styles.subtitle}>
             {isEditMode
-              ? 'Cap nhat thong tin san, bo mon va bo anh hien thi.'
-              : 'Tao san moi de nguoi dung xem lich trong va dat theo tung khung gio.'}
+              ? 'Cập nhật thông tin sân, bộ môn và bộ ảnh hiển thị.'
+              : 'Tạo sân mới để người dùng xem lịch trống và đặt theo từng khung giờ.'}
           </Text>
 
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Thong tin co ban</Text>
+            <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
 
             <Field
-              label="Ten san"
-              placeholder="VD: San Hoa Lu 1"
+              label="Tên sân"
+              placeholder="VD: Sân Hòa Lạc 1"
               value={form.name}
               onChangeText={(text) => handleChange('name', text)}
             />
@@ -323,20 +323,20 @@ export default function CreateCourtScreen() {
             </View>
 
             <Field
-              label="Dia chi"
-              placeholder="VD: 2 Dinh Tien Hoang, Quan 1"
+              label="Địa chỉ"
+              placeholder="VD: 2 Đinh Tiên Hoàng, Quận 1"
               value={form.address}
               onChangeText={(text) => handleChange('address', text)}
             />
             <Field
-              label="Gia thue theo gio"
+              label="Giá thuê theo giờ"
               placeholder="VD: 300000"
               value={form.pricePerHour}
               onChangeText={(text) => handleChange('pricePerHour', text.replace(/[^\d]/g, ''))}
               keyboardType="number-pad"
             />
             <Field
-              label="So dien thoai lien he"
+              label="Số điện thoại liên hệ"
               placeholder="VD: 0901234567"
               value={form.contactPhone}
               onChangeText={(text) => handleChange('contactPhone', text)}
@@ -345,8 +345,8 @@ export default function CreateCourtScreen() {
           </View>
 
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Bo anh san</Text>
-            <Text style={styles.helperText}>Anh dau tien se duoc dung lam anh dai dien o danh sach san.</Text>
+            <Text style={styles.sectionTitle}>Bộ ảnh sân</Text>
+            <Text style={styles.helperText}>Ảnh đầu tiên sẽ được dùng làm ảnh đại diện ở danh sách sân.</Text>
 
             <View style={styles.imageGrid}>
               {form.images.map((image) => {
@@ -372,16 +372,16 @@ export default function CreateCourtScreen() {
             </View>
 
             <Pressable style={styles.imageButton} onPress={pickCourtImages}>
-              <Text style={styles.imageButtonText}>Chon anh tu thu vien</Text>
+              <Text style={styles.imageButtonText}>Chọn ảnh từ thư viện</Text>
             </Pressable>
-            <Text style={styles.imageHint}>Toi da {MAX_IMAGES} anh. Anh moi se duoc tai len server sau khi luu san.</Text>
+            <Text style={styles.imageHint}>Tối đa {MAX_IMAGES} ảnh. Ảnh mới sẽ được tải lên server sau khi lưu sân.</Text>
           </View>
 
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Mo ta va tien ich</Text>
+            <Text style={styles.sectionTitle}>Mô tả và tiện ích</Text>
             <Field
-              label="Tien ich"
-              placeholder="VD: Den LED, Nha xe, Phong thay do"
+              label="Tiện ích"
+              placeholder="VD: Đèn LED, Nhà xe, Phòng thay đồ"
               value={form.amenitiesText}
               onChangeText={(text) => handleChange('amenitiesText', text)}
             />
@@ -397,8 +397,8 @@ export default function CreateCourtScreen() {
             ) : null}
 
             <Field
-              label="Mo ta"
-              placeholder="Mo ta ngan ve mat san, anh sang, vi tri, huong dan di chuyen..."
+              label="Mô tả"
+              placeholder="Mô tả ngắn về mặt sân, ánh sáng, vị trí, hướng dẫn di chuyển..."
               value={form.description}
               onChangeText={(text) => handleChange('description', text)}
               multiline
@@ -412,7 +412,7 @@ export default function CreateCourtScreen() {
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitBtnText}>{isEditMode ? 'Luu thay doi' : 'Dang san'}</Text>
+              <Text style={styles.submitBtnText}>{isEditMode ? 'Lưu thay đổi' : 'Đăng sân'}</Text>
             )}
           </Pressable>
         </ScrollView>

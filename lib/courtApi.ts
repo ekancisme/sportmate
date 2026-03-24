@@ -138,8 +138,8 @@ function normalizeCourt(raw: ApiCourt): ApiCourt {
 
 export function formatCourtPrice(pricePerHour: number): string {
   const value = Number(pricePerHour || 0);
-  if (!Number.isFinite(value) || value <= 0) return 'Lien he de bao gia';
-  return `${value.toLocaleString('vi-VN')}d/gio`;
+  if (!Number.isFinite(value) || value <= 0) return 'Liên hệ để báo giá';
+  return `${value.toLocaleString('vi-VN')}đ/giờ`;
 }
 
 export function resolveCourtImageUrl(imageUrl: string | undefined): string | undefined {
@@ -177,21 +177,21 @@ export async function fetchCourts(options?: { q?: string; sportKey?: CourtSportK
     sportKey: options?.sportKey && options.sportKey !== 'all' ? options.sportKey : undefined,
   });
   const res = await fetch(`${base}/api/courts${query}`);
-  const data = await parseResponse<ApiCourt[]>(res, 'Khong tai duoc danh sach san');
+  const data = await parseResponse<ApiCourt[]>(res, 'Không tải được danh sách sân');
   return data.map((item) => normalizeCourt(item));
 }
 
 export async function fetchCourtById(id: string): Promise<ApiCourt> {
   const base = getApiBaseUrl();
   const res = await fetch(`${base}/api/courts/${encodeURIComponent(id)}`);
-  const data = await parseResponse<ApiCourt>(res, 'Khong tai duoc thong tin san');
+  const data = await parseResponse<ApiCourt>(res, 'Không tải được thông tin sân');
   return normalizeCourt(data);
 }
 
 export async function fetchMyCourts(ownerId: string): Promise<ApiCourt[]> {
   const base = getApiBaseUrl();
   const res = await fetch(`${base}/api/courts/mine?ownerId=${encodeURIComponent(ownerId)}`);
-  const data = await parseResponse<ApiCourt[]>(res, 'Khong tai duoc san cua ban');
+  const data = await parseResponse<ApiCourt[]>(res, 'Không tải được sân của bạn');
   return data.map((item) => normalizeCourt(item));
 }
 
@@ -202,7 +202,7 @@ export async function createCourt(ownerId: string, payload: SaveCourtPayload): P
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ownerId, ...payload }),
   });
-  const data = await parseResponse<ApiCourt>(res, 'Khong dang duoc san');
+  const data = await parseResponse<ApiCourt>(res, 'Không đăng được sân');
   return normalizeCourt(data);
 }
 
@@ -217,7 +217,7 @@ export async function updateCourt(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ownerId, ...payload }),
   });
-  const data = await parseResponse<ApiCourt>(res, 'Khong cap nhat duoc san');
+  const data = await parseResponse<ApiCourt>(res, 'Không cập nhật được sân');
   return normalizeCourt(data);
 }
 
@@ -229,7 +229,7 @@ export async function deleteCourt(courtId: string, ownerId: string): Promise<voi
     body: JSON.stringify({ ownerId }),
   });
   if (res.status === 204) return;
-  await parseResponse(res, 'Khong xoa duoc san');
+  await parseResponse(res, 'Không xóa được sân');
 }
 
 export async function uploadCourtImages(
@@ -260,7 +260,7 @@ export async function uploadCourtImages(
     method: 'POST',
     body: form,
   });
-  const data = await parseResponse<ApiCourt>(res, 'Khong tai anh san len duoc');
+  const data = await parseResponse<ApiCourt>(res, 'Không tải ảnh sân lên được');
   return normalizeCourt(data);
 }
 
@@ -272,7 +272,7 @@ export async function fetchCourtAvailability(
   const res = await fetch(
     `${base}/api/courts/${encodeURIComponent(courtId)}/availability?date=${encodeURIComponent(date)}`,
   );
-  return parseResponse<CourtAvailabilityResponse>(res, 'Khong tai duoc lich trong');
+  return parseResponse<CourtAvailabilityResponse>(res, 'Không tải được lịch trống');
 }
 
 export async function createCourtBooking(
@@ -287,7 +287,7 @@ export async function createCourtBooking(
   });
   const data = await parseResponse<{ booking: ApiCourtBooking; court: ApiCourt }>(
     res,
-    'Khong the dat san luc nay',
+    'Không thể đặt sân lúc này',
   );
   return { booking: data.booking, court: normalizeCourt(data.court) };
 }
@@ -300,7 +300,7 @@ export async function fetchCourtBookings(
   const base = getApiBaseUrl();
   const query = buildQuery({ ownerId, date });
   const res = await fetch(`${base}/api/courts/${encodeURIComponent(courtId)}/bookings${query}`);
-  const data = await parseResponse<CourtBookingsResponse>(res, 'Khong tai duoc lich dat san');
+  const data = await parseResponse<CourtBookingsResponse>(res, 'Không tải được lịch đặt sân');
   return {
     ...data,
     court: normalizeCourt(data.court),
@@ -314,5 +314,5 @@ export async function cancelCourtBooking(bookingId: string, actorId: string): Pr
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ actorId }),
   });
-  return parseResponse<ApiCourtBooking>(res, 'Khong huy duoc booking');
+  return parseResponse<ApiCourtBooking>(res, 'Không hủy được booking');
 }

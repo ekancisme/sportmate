@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -16,7 +16,6 @@ import CourtGallery from '@/components/courts/CourtGallery';
 import CourtSlotGrid from '@/components/courts/CourtSlotGrid';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
-import { getUpcomingDateKeys } from '@/lib/courtCalendar';
 import {
   createCourtBooking,
   fetchCourtAvailability,
@@ -25,6 +24,7 @@ import {
   type ApiCourt,
   type CourtAvailabilitySlot,
 } from '@/lib/courtApi';
+import { getUpcomingDateKeys } from '@/lib/courtCalendar';
 
 const PRIMARY = '#ff4d4f';
 const DEFAULT_DATE = getUpcomingDateKeys(7)[0];
@@ -64,7 +64,7 @@ export default function CourtDetailScreen() {
       const row = await fetchCourtById(id);
       setCourt(row);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Khong tai duoc thong tin san');
+      setError(e instanceof Error ? e.message : 'Không tải được thông tin sân');
       setCourt(null);
     } finally {
       setLoading(false);
@@ -84,7 +84,7 @@ export default function CourtDetailScreen() {
       });
     } catch (e) {
       setSlots([]);
-      show('Loi', e instanceof Error ? e.message : 'Khong tai duoc lich trong', { variant: 'error' });
+      show('Lỗi', e instanceof Error ? e.message : 'Không tải được lịch trống', { variant: 'error' });
     } finally {
       setAvailabilityLoading(false);
     }
@@ -114,12 +114,12 @@ export default function CourtDetailScreen() {
         contactPhone: user.phone,
       });
       setBookingNotice(
-        `Da dat san thanh cong cho khung gio ${selectedSlot.startTime} - ${selectedSlot.endTime} ngay ${selectedDate}.`,
+        `Đã đặt sân thành công cho khung giờ ${selectedSlot.startTime} - ${selectedSlot.endTime} ngày ${selectedDate}.`,
       );
       setSelectedSlot(null);
       await loadAvailability();
     } catch (e) {
-      show('Khong dat duoc san', e instanceof Error ? e.message : 'Co loi xay ra', {
+      show('Không đặt được sân', e instanceof Error ? e.message : 'Có lỗi xảy ra', {
         variant: 'error',
       });
     } finally {
@@ -131,7 +131,7 @@ export default function CourtDetailScreen() {
     return (
       <View style={styles.centered}>
         <ActivityIndicator color={PRIMARY} />
-        <Text style={styles.loadingText}>Dang tai thong tin san...</Text>
+        <Text style={styles.loadingText}>Đang tải thông tin sân...</Text>
       </View>
     );
   }
@@ -139,9 +139,9 @@ export default function CourtDetailScreen() {
   if (error || !court) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>{error || 'Khong tim thay san'}</Text>
+        <Text style={styles.errorText}>{error || 'Không tìm thấy sân'}</Text>
         <Pressable style={styles.secondaryBtn} onPress={() => router.back()}>
-          <Text style={styles.secondaryBtnText}>Quay lai</Text>
+          <Text style={styles.secondaryBtnText}>Quay lại</Text>
         </Pressable>
       </View>
     );
@@ -153,7 +153,7 @@ export default function CourtDetailScreen() {
         <View style={styles.topRow}>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={22} color={PRIMARY} />
-            <Text style={styles.backText}>Quay lai</Text>
+            <Text style={styles.backText}>Quay lại</Text>
           </Pressable>
         </View>
 
@@ -179,16 +179,16 @@ export default function CourtDetailScreen() {
             <View style={styles.metaRow}>
               <Ionicons name="time-outline" size={16} color={PRIMARY} />
               <Text style={styles.metaText}>
-                Mo cua {court.openTime} - {court.closeTime} • Moi slot {court.slotMinutes} phut
+                Mở cửa {court.openTime} - {court.closeTime} • Mỗi slot {court.slotMinutes} phút
               </Text>
             </View>
             <View style={styles.metaRow}>
               <Ionicons name="call-outline" size={16} color={PRIMARY} />
-              <Text style={styles.metaText}>{court.contactPhone || court.owner?.phone || 'Dang cap nhat'}</Text>
+              <Text style={styles.metaText}>{court.contactPhone || court.owner?.phone || 'Đang cập nhật'}</Text>
             </View>
             <View style={styles.metaRow}>
               <Ionicons name="person-outline" size={16} color={PRIMARY} />
-              <Text style={styles.metaText}>{court.owner?.name || court.owner?.username || 'Chu san SportMate'}</Text>
+              <Text style={styles.metaText}>{court.owner?.name || court.owner?.username || 'Chủ sân SportMate'}</Text>
             </View>
           </View>
 
@@ -199,24 +199,24 @@ export default function CourtDetailScreen() {
                 onPress={() =>
                   router.push({ pathname: '/courts/create' as never, params: { editId: court.id } })
                 }>
-                <Text style={styles.secondaryBtnText}>Chinh sua san</Text>
+                <Text style={styles.secondaryBtnText}>Chỉnh sửa sân</Text>
               </Pressable>
               <Pressable
-                style={styles.primaryBtn}
+                style={styles.primaryBtnAction}
                 onPress={() => router.push(`/courts/bookings?courtId=${court.id}` as never)}>
-                <Text style={styles.primaryBtnText}>Xem lich dat</Text>
+                <Text style={styles.primaryBtnText}>Xem lịch đặt</Text>
               </Pressable>
             </View>
           ) : null}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Mo ta san</Text>
-          <Text style={styles.sectionText}>{court.description?.trim() || 'Chu san chua cap nhat mo ta chi tiet.'}</Text>
+          <Text style={styles.sectionTitle}>Mô tả sân</Text>
+          <Text style={styles.sectionText}>{court.description?.trim() || 'Chủ sân chưa cập nhật mô tả chi tiết.'}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tien ich</Text>
+          <Text style={styles.sectionTitle}>Tiện ích</Text>
           {court.amenities.length > 0 ? (
             <View style={styles.amenitiesWrap}>
               {court.amenities.map((item) => (
@@ -226,14 +226,14 @@ export default function CourtDetailScreen() {
               ))}
             </View>
           ) : (
-            <Text style={styles.sectionText}>Chua co thong tin tien ich.</Text>
+            <Text style={styles.sectionText}>Chưa có thông tin tiện ích.</Text>
           )}
         </View>
 
         {!isOwnerOfCourt ? (
           <View style={styles.bookingCard}>
-            <Text style={styles.sectionTitle}>Chon ngay va khung gio</Text>
-            <Text style={styles.bookingHint}>Xem slot trong theo ngay, chon khung gio phu hop roi bam thue san.</Text>
+            <Text style={styles.sectionTitle}>Chọn ngày và khung giờ</Text>
+            <Text style={styles.bookingHint}>Xem slot trống theo ngày, chọn khung giờ phù hợp rồi bấm thuê sân.</Text>
 
             {bookingNotice ? (
               <View style={styles.noticeCard}>
@@ -254,7 +254,7 @@ export default function CourtDetailScreen() {
                   slots={slots}
                   selectedStartTime={selectedSlot?.startTime || null}
                   onSelect={(slot) => setSelectedSlot(slot)}
-                  emptyText="Chua co khung gio kha dung cho ngay nay"
+                  emptyText="Chưa có khung giờ khả dụng cho ngày này"
                 />
               )}
             </View>
@@ -271,8 +271,8 @@ export default function CourtDetailScreen() {
               ) : (
                 <Text style={styles.primaryBtnText}>
                   {selectedSlot
-                    ? `Thue san ${selectedSlot.startTime} - ${selectedSlot.endTime}`
-                    : 'Chon khung gio de thue san'}
+                    ? `Thuê sân ${selectedSlot.startTime} - ${selectedSlot.endTime}`
+                    : 'Chọn khung giờ để thuê sân'}
                 </Text>
               )}
             </Pressable>
@@ -374,6 +374,14 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     marginTop: 18,
+    backgroundColor: PRIMARY,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnAction: {
+    flex: 1,
     backgroundColor: PRIMARY,
     borderRadius: 999,
     paddingVertical: 12,

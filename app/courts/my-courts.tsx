@@ -29,8 +29,8 @@ export default function MyCourtsScreen() {
 
   const noticeText = useMemo(() => {
     const raw = Array.isArray(params.notice) ? params.notice[0] : params.notice;
-    if (raw === 'created') return 'Dang san thanh cong. San cua ban da san sang cho viec dat lich.';
-    if (raw === 'updated') return 'Cap nhat san thanh cong.';
+    if (raw === 'created') return 'Đăng sân thành công. Sân của bạn đã sẵn sàng cho việc đặt lịch.';
+    if (raw === 'updated') return 'Cập nhật sân thành công.';
     return '';
   }, [params.notice]);
 
@@ -47,7 +47,7 @@ export default function MyCourtsScreen() {
       const rows = await fetchMyCourts(user.id);
       setCourts(rows);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Khong tai duoc san cua ban');
+      setError(e instanceof Error ? e.message : 'Không tải được sân của bạn');
       setCourts([]);
     } finally {
       setLoading(false);
@@ -63,10 +63,10 @@ export default function MyCourtsScreen() {
   const handleDelete = (court: ApiCourt) => {
     if (!user?.id) return;
 
-    show('Xoa san', `Ban co chac muon xoa "${court.name}"?`, {
+    show('Xoá sân', `Bạn có chắc muốn xoá "${court.name}"?`, {
       variant: 'error',
-      confirmLabel: 'Xoa',
-      cancelLabel: 'Huy',
+      confirmLabel: 'Xoá',
+      cancelLabel: 'Huỷ',
       onConfirm: () => {
         void (async () => {
           setBusyId(court.id);
@@ -74,7 +74,7 @@ export default function MyCourtsScreen() {
             await deleteCourt(court.id, user.id);
             setCourts((prev) => prev.filter((item) => item.id !== court.id));
           } catch (error) {
-            show('Khong xoa duoc', error instanceof Error ? error.message : 'Co loi xay ra', {
+            show('Không xoá được', error instanceof Error ? error.message : 'Có lỗi xảy ra', {
               variant: 'error',
             });
           } finally {
@@ -89,10 +89,10 @@ export default function MyCourtsScreen() {
     return (
       <>
         <View style={styles.deniedWrap}>
-          <Text style={styles.deniedTitle}>Khu vuc danh cho owner</Text>
-          <Text style={styles.deniedText}>Chi tai khoan owner moi co the dang va quan ly san cua minh.</Text>
+          <Text style={styles.deniedTitle}>Khu vực dành cho owner</Text>
+          <Text style={styles.deniedText}>Chỉ tài khoản owner mới có thể đăng và quản lý sân của mình.</Text>
           <Pressable style={styles.secondaryBtn} onPress={() => router.replace('/courts' as never)}>
-            <Text style={styles.secondaryBtnText}>Xem danh sach san</Text>
+            <Text style={styles.secondaryBtnText}>Xem danh sách sân</Text>
           </Pressable>
         </View>
         {AppAlertNode}
@@ -106,17 +106,17 @@ export default function MyCourtsScreen() {
         <View style={styles.topRow}>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={22} color={PRIMARY} />
-            <Text style={styles.backText}>Quay lai</Text>
+            <Text style={styles.backText}>Quay lại</Text>
           </Pressable>
         </View>
 
         <View style={styles.headerCard}>
-          <Text style={styles.title}>San cua toi</Text>
+          <Text style={styles.title}>Sân của tôi</Text>
           <Text style={styles.subtitle}>
-            Dang san moi, chinh sua thong tin va theo doi lich dat cua tung san ngay tren man quan ly.
+            Đăng sân mới, chỉnh sửa thông tin và theo dõi lịch đặt của từng sân ngay trên màn quản lý.
           </Text>
           <Pressable style={styles.primaryBtn} onPress={() => router.push('/courts/create' as never)}>
-            <Text style={styles.primaryBtnText}>+ Dang san moi</Text>
+            <Text style={styles.primaryBtnText}>+ Đăng sân mới</Text>
           </Pressable>
         </View>
 
@@ -134,7 +134,7 @@ export default function MyCourtsScreen() {
         ) : error ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : courts.length === 0 ? (
-          <Text style={styles.emptyText}>Ban chua dang san nao.</Text>
+          <Text style={styles.emptyText}>Bạn chưa đăng sân nào.</Text>
         ) : (
           courts.map((court) => {
             const isBusy = busyId === court.id;
@@ -170,19 +170,19 @@ export default function MyCourtsScreen() {
                       router.push({ pathname: '/courts/create' as never, params: { editId: court.id } })
                     }
                     disabled={isBusy}>
-                    <Text style={styles.secondaryActionText}>Sua</Text>
+                    <Text style={styles.secondaryActionText}>Sửa</Text>
                   </Pressable>
                   <Pressable
                     style={styles.primaryAction}
                     onPress={() => router.push(`/courts/bookings?courtId=${court.id}` as never)}
                     disabled={isBusy}>
-                    <Text style={styles.primaryActionText}>Lich dat</Text>
+                    <Text style={styles.primaryActionText}>Lịch đặt</Text>
                   </Pressable>
                   <Pressable
                     style={styles.deleteAction}
                     onPress={() => handleDelete(court)}
                     disabled={isBusy}>
-                    <Text style={styles.deleteActionText}>{isBusy ? '...' : 'Xoa'}</Text>
+                    <Text style={styles.deleteActionText}>{isBusy ? '...' : 'Xoá'}</Text>
                   </Pressable>
                 </View>
               </View>

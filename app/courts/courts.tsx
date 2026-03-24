@@ -44,7 +44,7 @@ export default function CourtsScreen() {
       const rows = await fetchCourts();
       setCourts(rows);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Khong tai duoc danh sach san');
+      setError(e instanceof Error ? e.message : 'Không tải được danh sách sân');
       setCourts([]);
     } finally {
       setLoading(false);
@@ -79,17 +79,17 @@ export default function CourtsScreen() {
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <View style={styles.heroCard}>
-        <Text style={styles.badge}>San the thao</Text>
+        <Text style={styles.badge}>Sân thể thao</Text>
         <Text style={styles.logo}>SportMate Courts</Text>
-        <Text style={styles.title}>Tim san phu hop va dat lich theo tung khung gio trong.</Text>
+        <Text style={styles.title}>Tìm sân phù hợp và đặt lịch theo từng khung giờ trống.</Text>
         <Text style={styles.subtitle}>
-          Tim theo ten san, bo mon, dia chi va chon nhanh bang tag de xem cac san dang hoat dong.
+          Tìm theo tên sân, bộ môn, địa chỉ và chọn nhanh bằng tag để xem các sân đang hoạt động.
         </Text>
 
         {role === 'owner' ? (
           <Pressable style={styles.ownerButton} onPress={() => router.push('/courts/my-courts' as never)}>
             <Ionicons name="settings-outline" size={18} color="#fff" />
-            <Text style={styles.ownerButtonText}>Quan ly san cua toi</Text>
+            <Text style={styles.ownerButtonText}>Quản lý sân của tôi</Text>
           </Pressable>
         ) : null}
       </View>
@@ -99,7 +99,7 @@ export default function CourtsScreen() {
           <Ionicons name="search-outline" size={18} color="#888" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tim san, bo mon, dia chi..."
+            placeholder="Tìm sân, bộ môn, địa chỉ..."
             placeholderTextColor="#777"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -110,7 +110,7 @@ export default function CourtsScreen() {
           <Pressable
             style={[styles.tagChip, selectedSport === 'all' && styles.tagChipActive]}
             onPress={() => setSelectedSport('all')}>
-            <Text style={[styles.tagText, selectedSport === 'all' && styles.tagTextActive]}>Tat ca</Text>
+            <Text style={[styles.tagText, selectedSport === 'all' && styles.tagTextActive]}>Tất cả</Text>
           </Pressable>
 
           {COURT_SPORT_OPTIONS.map((sport) => {
@@ -130,24 +130,24 @@ export default function CourtsScreen() {
       {loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator color={PRIMARY} />
-          <Text style={styles.loadingText}>Dang tai danh sach san...</Text>
+          <Text style={styles.loadingText}>Đang tải danh sách sân...</Text>
         </View>
       ) : error ? (
         <View style={styles.feedbackCard}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable style={styles.retryButton} onPress={loadCourts}>
-            <Text style={styles.retryButtonText}>Thu lai</Text>
+            <Text style={styles.retryButtonText}>Thử lại</Text>
           </Pressable>
         </View>
       ) : filteredCourts.length === 0 ? (
         <View style={styles.feedbackCard}>
           <Text style={styles.emptyTitle}>
-            {courts.length === 0 ? 'Chua co san nao duoc dang.' : 'Khong tim thay san phu hop.'}
+            {courts.length === 0 ? 'Chưa có sân nào được đăng.' : 'Không tìm thấy sân phù hợp.'}
           </Text>
           <Text style={styles.emptySubtitle}>
             {courts.length === 0
-              ? 'Hay quay lai sau hoac dang san neu ban la owner.'
-              : 'Hay thu doi tu khoa tim kiem hoac chon tag bo mon khac.'}
+              ? 'Hãy quay lại sau hoặc đăng sân nếu bạn là owner.'
+              : 'Hãy thử đổi từ khóa tìm kiếm hoặc chọn tag bộ môn khác.'}
           </Text>
         </View>
       ) : (
@@ -178,11 +178,11 @@ export default function CourtsScreen() {
                 </View>
 
                 <Text style={styles.cardMeta}>{court.address}</Text>
-                <Text style={styles.cardHours}>Mo cua {court.openTime} - {court.closeTime}</Text>
+                <Text style={styles.cardHours}>Mở cửa {court.openTime} - {court.closeTime}</Text>
 
                 <View style={styles.cardInfoRow}>
                   <Text style={styles.cardPrice}>{formatCourtPrice(court.pricePerHour)}</Text>
-                  <Text style={styles.cardOwner}>{court.owner?.name || court.owner?.username || 'Chu san SportMate'}</Text>
+                  <Text style={styles.cardOwner}>{court.owner?.name || court.owner?.username || 'Chủ sân SportMate'}</Text>
                 </View>
               </View>
             </Pressable>
