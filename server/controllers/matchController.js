@@ -35,6 +35,8 @@ function parseTimeToMinutesRange(timeStr) {
 function rangesOverlap(a, b) {
   if (!a || !b) return false;
   return a.start < b.end && b.start < a.end;
+}
+
 // ── Helper: chuyển yyyy-mm-dd sang tên Thứ (tiếng Việt) ─────────────────
 const DAYS_VI = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 function buildDayLabel(dateStr) {

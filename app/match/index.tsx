@@ -212,6 +212,8 @@ export default function MatchDetailScreen() {
       try {
         const raw = await joinMatch(match.id, user.id);
         setBaseMatch(mapApiMatchToDetail(raw));
+        // Cập nhật lịch trình trong AuthContext để profile hiển thị ngay
+        void refreshUser();
       } catch (e) {
         show('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại', {
           variant: 'error',
@@ -222,7 +224,6 @@ export default function MatchDetailScreen() {
     };
 
     try {
-<<<<<<< HEAD
       const check = await checkJoinMatch(match.id, user.id);
 
       if (!check.allow && check.reason === 'overlap') {
@@ -251,12 +252,6 @@ export default function MatchDetailScreen() {
       }
 
       await doJoin();
-=======
-      const raw = await joinMatch(match.id, user.id);
-      setBaseMatch(mapApiMatchToDetail(raw));
-      // Cập nhật lịch trình trong AuthContext để profile hiển thị ngay
-      void refreshUser();
->>>>>>> main
     } catch (e) {
       show(
         'Lỗi',
