@@ -13,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -63,6 +64,7 @@ const API_BASE = getApiBaseUrl();
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MyProfile() {
+  const insets = useSafeAreaInsets();
   const { user: authUser, setUserFromServer, logout, role } = useAuth();
 
   // ── state ──
@@ -183,15 +185,9 @@ export default function MyProfile() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingTop: insets.top + 10 }]}>
 
-      {/* ── Header ── */}
-      <View style={styles.pageHeader}>
-        <View>
-          <Text style={styles.pageTitle}>Hồ Sơ Của Tôi</Text>
-          <Text style={styles.pageSubtitle}>Quản lý thông tin cá nhân</Text>
-        </View>
-      </View>
+          
 
       {/* ── Profile Card ── */}
       <View style={styles.profileCard}>
@@ -507,7 +503,7 @@ const MUTED = '#888';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  content: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 100 },
+  content: { paddingHorizontal: 18, paddingTop: 0, paddingBottom: 100 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG },
   loadingText: { color: MUTED, marginTop: 12, fontSize: 14 },
 
@@ -539,6 +535,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingVertical: 24,
     paddingHorizontal: 16,
+    marginTop: 14,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: BORDER,

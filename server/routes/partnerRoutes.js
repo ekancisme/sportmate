@@ -143,7 +143,7 @@ router.get('/suggested', async (req, res) => {
     }
 
     // Build query để exclude user hiện tại
-    const query = {};
+    const query = { isBanned: { $ne: true } };
     if (userId) {
       query._id = { $ne: userId };
     }
