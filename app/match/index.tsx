@@ -26,6 +26,8 @@ import {
   mapApiMatchToDetail,
   type MatchDetail,
 } from '@/lib/matchApi';
+import { computeDisplayStatus } from '@/lib/matchStatus';
+import { StatusBadge } from '@/components/StatusBadge';
 
 const PRIMARY = '#ff4d4f';
 const HEADER_MAROON = '#3d1419';
@@ -60,7 +62,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 export default function MatchDetailScreen() {
   const params = useLocalSearchParams<{ id?: string; refresh?: string }>();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { show, Alert: AppAlertNode } = useAppAlert();
   const [baseMatch, setBaseMatch] = useState<MatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -188,6 +190,8 @@ export default function MatchDetailScreen() {
             try {
               const raw = await leaveMatch(match.id, user.id);
               setBaseMatch(mapApiMatchToDetail(raw));
+              // Cập nhật lịch trình trong AuthContext
+              void refreshUser();
             } catch (e) {
               show(
                 'Lỗi',
@@ -218,6 +222,7 @@ export default function MatchDetailScreen() {
     };
 
     try {
+<<<<<<< HEAD
       const check = await checkJoinMatch(match.id, user.id);
 
       if (!check.allow && check.reason === 'overlap') {
@@ -246,6 +251,12 @@ export default function MatchDetailScreen() {
       }
 
       await doJoin();
+=======
+      const raw = await joinMatch(match.id, user.id);
+      setBaseMatch(mapApiMatchToDetail(raw));
+      // Cập nhật lịch trình trong AuthContext để profile hiển thị ngay
+      void refreshUser();
+>>>>>>> main
     } catch (e) {
       show(
         'Lỗi',
@@ -354,17 +365,12 @@ export default function MatchDetailScreen() {
 
           <View style={styles.card}>
             <Text style={styles.statusLabel}>Tình trạng</Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>
-                {matchStatus === 'active'
-                  ? spotsLeft > 0
-                    ? `${spotsLeft} chỗ trống`
-                    : 'Đã đủ người'
-                  : matchStatus === 'finished'
-                    ? 'Đã kết thúc'
-                    : 'Đã hủy'}
-              </Text>
-            </View>
+            {/* Badge trạng thái thời gian */}
+            <StatusBadge
+              status={computeDisplayStatus(match.status ?? 'active', match.date, match.timeRange)}
+              size="md"
+            />
+            <View style={{ height: 14 }} />
             <Pressable
               onPress={toggleJoin}
               disabled={joinBusy || matchStatus !== 'active' || (!isJoined && spotsLeft <= 0)}

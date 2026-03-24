@@ -1,192 +1,270 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchMyMatches, formatDateVi, type ApiMatch } from '@/lib/matchApi';
 
-type UserSport = {
-  name: string;
-  level: string;
-};
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-type UserScheduleItem = {
-  day: string;
-  time: string;
-  activity: string;
-};
-
-type UserStats = {
-  matchesPlayed: number;
-  winRate: number;
-  hoursActive: number;
-  followers: number;
-};
+type UserSport = { name: string; level: string };
+type UserScheduleItem = { day: string; time: string; activity: string; matchId?: string };
 
 type UserProfile = {
   name: string;
-  age: number;
-  location: string;
-  bio: string;
   email: string;
   phone: string;
   avatar: string;
-  stats: UserStats;
+  stats: {
+    matchesPlayed: number;
+    matchesWon: number;
+    winRate: number;
+    hoursActive: number;
+    followers: number;
+  };
   sports: UserSport[];
   schedule: UserScheduleItem[];
 };
 
-function getApiBaseUrl() {
+const LEVELS = ['Cơ Bản', 'Trung Bình', 'Cao', 'Chuyên Nghiệp'];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getApiBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL as string | undefined;
   if (envUrl) return envUrl;
-
   const hostUri =
     Constants.expoConfig?.hostUri ||
+    // @ts-ignore old expo
     Constants.manifest?.hostUri;
-
-  if (hostUri) {
-    const host = hostUri.split(':')[0];
-    return `http://${host}:3000`;
-  }
-
+  if (hostUri) return `http://${hostUri.split(':')[0]}:3000`;
   return 'http://localhost:3000';
 }
 
-const EMPTY_PROFILE: UserProfile = {
-  name: '',
-  age: 0,
-  location: '',
-  bio: '',
-  email: '',
-  phone: '',
-  avatar: '',
-  stats: {
-    matchesPlayed: 0,
-    winRate: 0,
-    hoursActive: 0,
-    followers: 0,
-  },
-  sports: [],
-  schedule: [],
-};
+const API_BASE = getApiBaseUrl();
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MyProfile() {
-  const { logout, user: authUser } = useAuth();
-  const apiBase = getApiBaseUrl();
-  const [user, setUser] = useState<UserProfile>(EMPTY_PROFILE);
+  const { user: authUser, setUserFromServer, logout, role } = useAuth();
 
-  const [myMatches, setMyMatches] = useState<ApiMatch[]>([]);
-  const [matchesLoading, setMatchesLoading] = useState(false);
-  const [matchesErr, setMatchesErr] = useState<string | null>(null);
+  // ── state ──
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<UserProfile | null>(null);
+  const [saving, setSaving] = useState(false);
 
+  // add-sport inputs
+  const [newSportName, setNewSportName] = useState('');
+  const [newSportLevelIdx, setNewSportLevelIdx] = useState(1); // default "Trung Bình"
+
+  // add-schedule inputs
+  const [newDay, setNewDay] = useState('');
+  const [newTime, setNewTime] = useState('');
+  const [newActivity, setNewActivity] = useState('');
+
+  // level picker visibility (sport)
+  const [showLevelPicker, setShowLevelPicker] = useState(false);
+
+  // ── populate from authUser ──
   useEffect(() => {
     if (!authUser) return;
-
-    setUser({
+    const p: UserProfile = {
       name: authUser.name || '',
-      age: authUser.age || 0,
-      location: authUser.location || '',
-      bio: authUser.bio || '',
       email: authUser.email || '',
       phone: authUser.phone || '',
       avatar: authUser.avatar || '',
       stats: {
-        matchesPlayed: authUser.stats?.matchesPlayed ?? 32,
-        winRate: authUser.stats?.winRate ?? 58,
-        hoursActive: authUser.stats?.hoursActive ?? 120,
-        followers: authUser.stats?.followers ?? 24,
+        matchesPlayed: authUser.stats?.matchesPlayed ?? 0,
+        matchesWon: 0,
+        winRate: authUser.stats?.winRate ?? 0,
+        hoursActive: authUser.stats?.hoursActive ?? 0,
+        followers: authUser.stats?.followers ?? 0,
       },
-      sports:
-        authUser.sports && authUser.sports.length ? authUser.sports : [],
-      schedule:
-        (authUser.schedule && authUser.schedule.length ? authUser.schedule : []).map(
-          (it) => ({
-            day: it.day,
-            time: it.time ?? '',
-            activity: it.activity,
-          }),
-        ),
-    });
+      sports: authUser.sports ?? [],
+      schedule: (authUser.schedule ?? []).map((s) => ({
+        day: s.day,
+        time: s.time ?? '',
+        activity: s.activity,
+        matchId: s.matchId,
+      })),
+    };
+    setProfile(p);
+    setEditData(p);
   }, [authUser]);
 
-  useEffect(() => {
-    async function loadMatches() {
-      if (!authUser?.id) {
-        setMyMatches([]);
-        return;
-      }
+  // ── handlers ──
+  const handleEdit = () => {
+    setEditData(profile);
+    setIsEditing(true);
+  };
 
-      setMatchesLoading(true);
-      setMatchesErr(null);
+  const handleCancel = () => {
+    setEditData(profile);
+    setIsEditing(false);
+  };
 
-      try {
-        const rows = await fetchMyMatches(authUser.id);
-        setMyMatches(rows);
+  const handleSave = async () => {
+    if (!editData || !authUser?.id) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/users/${authUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editData.name,
+          email: editData.email,
+          phone: editData.phone,
+          sports: editData.sports,
+          schedule: editData.schedule,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Cập nhật thất bại');
 
-        // Tính lại số trận đã chơi & tỷ lệ thắng dựa trên các trận finished
-        const finished = rows.filter((m) => m.status === 'finished');
-        const matchesPlayed = finished.length;
-        const won = finished.filter((m) => (m.winners ?? []).includes(authUser.id)).length;
-        const winRate = matchesPlayed > 0 ? Math.round((won / matchesPlayed) * 100) : 0;
-
-        setUser((prev) => ({
-          ...prev,
-          stats: {
-            ...prev.stats,
-            matchesPlayed,
-            winRate,
-          },
-        }));
-      } catch (e) {
-        setMatchesErr(e instanceof Error ? e.message : 'Không tải được trận của bạn');
-      } finally {
-        setMatchesLoading(false);
-      }
+      // sync back to AuthContext so the rest of the app sees fresh data
+      setUserFromServer({ ...authUser, ...data });
+      setProfile(editData);
+      setIsEditing(false);
+    } catch (e: unknown) {
+      Alert.alert('Lỗi', e instanceof Error ? e.message : 'Không thể lưu thay đổi');
+    } finally {
+      setSaving(false);
     }
+  };
 
-    void loadMatches();
-  }, [authUser?.id]);
+  const addSport = () => {
+    if (!newSportName.trim() || !editData) return;
+    setEditData({
+      ...editData,
+      sports: [
+        ...editData.sports,
+        { name: newSportName.trim(), level: LEVELS[newSportLevelIdx] },
+      ],
+    });
+    setNewSportName('');
+    setNewSportLevelIdx(1);
+    setShowLevelPicker(false);
+  };
 
+  const removeSport = (idx: number) => {
+    if (!editData) return;
+    setEditData({ ...editData, sports: editData.sports.filter((_, i) => i !== idx) });
+  };
+
+  const addSchedule = () => {
+    if (!newDay.trim() || !newTime.trim() || !newActivity.trim() || !editData) return;
+    setEditData({
+      ...editData,
+      schedule: [
+        ...editData.schedule,
+        { day: newDay.trim(), time: newTime.trim(), activity: newActivity.trim() },
+      ],
+    });
+    setNewDay('');
+    setNewTime('');
+    setNewActivity('');
+  };
+
+  const removeSchedule = (idx: number) => {
+    if (!editData) return;
+    setEditData({ ...editData, schedule: editData.schedule.filter((_, i) => i !== idx) });
+  };
+
+  // ── loading guard ──
+  if (!profile) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#ff4d4f" />
+        <Text style={styles.loadingText}>Đang tải hồ sơ…</Text>
+      </View>
+    );
+  }
+
+  const displayData = isEditing ? editData! : profile;
+  const avatarUri = displayData.avatar
+    ? displayData.avatar.startsWith('http')
+      ? displayData.avatar
+      : API_BASE + displayData.avatar
+    : null;
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      <View style={styles.profileCard}>
-        <View style={styles.avatarWrapper}>
-          <Pressable
-            style={styles.avatarCircle}
-            onPress={() => router.push('/my-profile/edit')}>
-            {user.avatar ? (
-              <Image
-                source={{
-                  uri: user.avatar.startsWith('http') ? user.avatar : apiBase + user.avatar,
-                }}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <Text style={styles.avatarInitial}>{user.name.charAt(0) || 'S'}</Text>
-            )}
-          </Pressable>
-          <View style={styles.avatarBadge}>
-            <Text style={styles.avatarBadgeText}>⚽</Text>
-          </View>
+      {/* ── Header ── */}
+      <View style={styles.pageHeader}>
+        <View>
+          <Text style={styles.pageTitle}>Hồ Sơ Của Tôi</Text>
+          <Text style={styles.pageSubtitle}>Quản lý thông tin cá nhân</Text>
         </View>
 
-        <Text style={styles.profileName}>{user.name}</Text>
-        <Text style={styles.profileRole}>Người chơi SportMate</Text>
         <Pressable
-          onPress={() => router.push('/my-profile/edit')}
-          style={styles.changeProfileBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Chỉnh sửa hồ sơ"
+          style={[styles.editToggleBtn, isEditing && styles.cancelBtn]}
+          onPress={isEditing ? handleCancel : handleEdit}
         >
-          <Ionicons name="settings" size={22} color="#ff4d4f" />
+          <Ionicons name={isEditing ? 'close' : 'create-outline'} size={16} color="#fff" />
+          <Text style={styles.editToggleBtnText}>{isEditing ? 'Hủy' : 'Chỉnh Sửa'}</Text>
+        </Pressable>
+      </View>
+
+      {/* ── Profile Card ── */}
+      <View style={styles.profileCard}>
+        {/* avatar */}
+        <Pressable
+          style={styles.avatarWrapper}
+          onPress={() => router.push('/my-profile/edit')}
+        >
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarInitial}>{displayData.name.charAt(0) || 'S'}</Text>
+            </View>
+          )}
+          <View style={styles.avatarBadge}>
+            <Ionicons name="camera" size={12} color="#fff" />
+          </View>
         </Pressable>
 
+        {/* name / role */}
+        {isEditing ? (
+          <TextInput
+            style={[styles.nameInput]}
+            value={editData!.name}
+            onChangeText={(t) => setEditData({ ...editData!, name: t })}
+            placeholder="Tên hiển thị"
+            placeholderTextColor="#666"
+          />
+        ) : (
+          <Text style={styles.profileName}>{displayData.name}</Text>
+        )}
+        <Text style={styles.profileRole}>Người chơi SportMate</Text>
+
+        {role === 'admin' && (
+          <Pressable
+            onPress={() => router.push('/admin')}
+            style={({ pressed }) => [styles.adminManageBtn, pressed && styles.adminManageBtnPressed]}>
+            <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            <Text style={styles.adminManageBtnText}>Trang Quản Lý</Text>
+          </Pressable>
+        )}
+
+        {/* sport chips */}
         <View style={styles.chipGroup}>
-          {user.sports.map((s) => (
-            <View key={`${s.name}-${s.level}`} style={styles.chip}>
+          {displayData.sports.map((s, i) => (
+            <View key={`${s.name}-${i}`} style={styles.chip}>
               <Text style={styles.chipText}>
                 {s.name} • {s.level}
               </Text>
@@ -195,216 +273,384 @@ export default function MyProfile() {
         </View>
       </View>
 
+      {/* ── Stats Row ── */}
       <View style={styles.statsRow}>
-        <Stat label="Trận đấu" value={user.stats.matchesPlayed} />
-        <Stat label="Tỷ lệ thắng (%)" value={user.stats.winRate} />
-        <Stat label="Giờ hoạt động" value={user.stats.hoursActive} />
-        <Stat label="Người theo dõi" value={user.stats.followers} />
+        <StatCard label="Trận Đấu" value={String(profile.stats.matchesPlayed)} />
+        <StatCard label="Tỷ Lệ Thắng" value={`${profile.stats.winRate}%`} />
+        <StatCard label="Giờ HĐ" value={String(profile.stats.hoursActive)} />
+        <StatCard label="Theo Dõi" value={String(profile.stats.followers)} />
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Giới thiệu</Text>
-        <Text style={styles.aboutText}>{user.bio}</Text>
-      </View>
+      {/* ── Thông Tin Liên Hệ ── */}
+      <SectionCard title="Thông Tin Liên Hệ">
+        {isEditing ? (
+          <>
+            <FieldInput
+              label="Email"
+              value={editData!.email}
+              onChangeText={(t) => setEditData({ ...editData!, email: t })}
+              keyboardType="email-address"
+            />
+            <FieldInput
+              label="Số Điện Thoại"
+              value={editData!.phone}
+              onChangeText={(t) => setEditData({ ...editData!, phone: t })}
+              keyboardType="phone-pad"
+            />
+          </>
+        ) : (
+          <>
+            <FieldDisplay label="Email" value={displayData.email} />
+            <FieldDisplay label="Số Điện Thoại" value={displayData.phone} />
+          </>
+        )}
+      </SectionCard>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Lịch tập luyện</Text>
-        <View style={styles.scheduleGrid}>
-          {user.schedule.map((s, idx) => (
-            <View key={`${s.day}-${idx}`} style={styles.scheduleCard}>
-              <Text style={styles.scheduleDay}>{s.day}</Text>
-              <Text style={styles.scheduleTime}>{s.time}</Text>
-              <Text style={styles.scheduleActivity}>{s.activity}</Text>
+      {/* ── Môn Thể Thao ── */}
+      <SectionCard title="Môn Thể Thao">
+        {displayData.sports.length === 0 ? (
+          <Text style={styles.emptyText}>Chưa có môn thể thao nào</Text>
+        ) : (
+          displayData.sports.map((s, idx) => (
+            <View key={`sport-${idx}`} style={styles.listItem}>
+              <View style={styles.listItemLeft}>
+                <Text style={styles.listItemTitle}>{s.name}</Text>
+                <View style={styles.levelBadge}>
+                  <Text style={styles.levelBadgeText}>{s.level}</Text>
+                </View>
+              </View>
+              {isEditing && (
+                <Pressable onPress={() => removeSport(idx)} style={styles.removeBtn}>
+                  <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
+                </Pressable>
+              )}
             </View>
-          ))}
-        </View>
-      </View>
+          ))
+        )}
 
-      <View style={styles.actionsRow}>
-        <Pressable
-          style={[styles.secondaryBtn, styles.actionBtn]}
-          onPress={() => router.push('/(tabs)/my-matches')}>
-          <Text style={styles.secondaryBtnText}>Trận của tôi</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.primaryBtn, styles.actionBtn]}
-          onPress={() => router.push('/match/create-match')}>
-          <Text style={styles.primaryBtnText}>+ Tạo trận đấu</Text>
-        </Pressable>
-      </View>
-      <View style={styles.actionsRowSingle}>
-        <Pressable
-          style={[styles.secondaryBtn, styles.actionBtn]}
-          onPress={() => {
-            logout();
-            router.replace('/(auth)');
-          }}>
-          <Text style={styles.secondaryBtnText}>Đăng xuất</Text>
-        </Pressable>
-      </View>
+        {isEditing && (
+          <View style={styles.addBlock}>
+            <Text style={styles.addBlockTitle}>Thêm môn thể thao</Text>
+            <TextInput
+              style={styles.addInput}
+              placeholder="Tên môn (vd: Bóng Bàn)"
+              placeholderTextColor="#555"
+              value={newSportName}
+              onChangeText={setNewSportName}
+            />
+            {/* Level picker */}
+            <Pressable
+              style={styles.levelPickerBtn}
+              onPress={() => setShowLevelPicker(!showLevelPicker)}
+            >
+              <Text style={styles.levelPickerBtnText}>{LEVELS[newSportLevelIdx]}</Text>
+              <Ionicons
+                name={showLevelPicker ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color="#aaa"
+              />
+            </Pressable>
+            {showLevelPicker &&
+              LEVELS.map((lv, i) => (
+                <Pressable
+                  key={lv}
+                  style={[styles.levelOption, i === newSportLevelIdx && styles.levelOptionActive]}
+                  onPress={() => {
+                    setNewSportLevelIdx(i);
+                    setShowLevelPicker(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.levelOptionText,
+                      i === newSportLevelIdx && styles.levelOptionTextActive,
+                    ]}
+                  >
+                    {lv}
+                  </Text>
+                </Pressable>
+              ))}
+            <Pressable style={styles.addBtn} onPress={addSport}>
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={styles.addBtnText}>Thêm Môn</Text>
+            </Pressable>
+          </View>
+        )}
+      </SectionCard>
+
+      {/* ── Lịch Trình ── */}
+      <SectionCard title="Lịch Trình">
+        {displayData.schedule.length === 0 ? (
+          <Text style={styles.emptyText}>Chưa có lịch trình nào</Text>
+        ) : (
+          displayData.schedule.map((s, idx) => (
+            <View key={`sched-${idx}`} style={styles.scheduleItem}>
+              <View style={styles.scheduleItemLeft}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.scheduleActivity}>{s.activity}</Text>
+                  {s.matchId && (
+                    <View style={styles.matchBadge}>
+                      <Ionicons name="trophy-outline" size={10} color="#ffb347" />
+                      <Text style={styles.matchBadgeText}>Trận đấu</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.scheduleDay}>{s.day}</Text>
+              </View>
+              <View style={styles.scheduleItemRight}>
+                <Text style={styles.scheduleTime}>{s.time}</Text>
+                {/* Chỉ cho xóa thủ công các lịch không gắn với trận */}
+                {isEditing && !s.matchId && (
+                  <Pressable onPress={() => removeSchedule(idx)} style={styles.removeBtn}>
+                    <Ionicons name="trash-outline" size={14} color="#ff6b6b" />
+                  </Pressable>
+                )}
+                {isEditing && s.matchId && (
+                  <Ionicons name="lock-closed-outline" size={13} color="#555" />
+                )}
+              </View>
+            </View>
+          ))
+        )}
+
+        {isEditing && (
+          <View style={styles.addBlock}>
+            <Text style={styles.addBlockTitle}>Thêm lịch trình</Text>
+            <TextInput
+              style={styles.addInput}
+              placeholder="Ngày (vd: Thứ 7)"
+              placeholderTextColor="#555"
+              value={newDay}
+              onChangeText={setNewDay}
+            />
+            <TextInput
+              style={styles.addInput}
+              placeholder="Giờ (vd: 18:00 - 20:00)"
+              placeholderTextColor="#555"
+              value={newTime}
+              onChangeText={setNewTime}
+            />
+            <TextInput
+              style={styles.addInput}
+              placeholder="Hoạt động (vd: Bóng Đá)"
+              placeholderTextColor="#555"
+              value={newActivity}
+              onChangeText={setNewActivity}
+            />
+            <Pressable style={styles.addBtn} onPress={addSchedule}>
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={styles.addBtnText}>Thêm Lịch Trình</Text>
+            </Pressable>
+          </View>
+        )}
+      </SectionCard>
+
+      {/* ── Save / Cancel buttons when editing ── */}
+      {isEditing && (
+        <View style={styles.saveRow}>
+          <Pressable style={[styles.saveBtn, saving && styles.saveBtnDisabled]} onPress={handleSave} disabled={saving}>
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="save-outline" size={16} color="#fff" />
+                <Text style={styles.saveBtnText}>Lưu Thay Đổi</Text>
+              </>
+            )}
+          </Pressable>
+          <Pressable style={styles.cancelBtnFull} onPress={handleCancel}>
+            <Ionicons name="close" size={16} color="#aaa" />
+            <Text style={styles.cancelBtnText}>Hủy</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── Action Buttons ── */}
+      {!isEditing && (
+        <View style={styles.actionsBlock}>
+          <Pressable
+            style={styles.primaryBtn}
+            onPress={() => router.push('/match/create-match')}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#fff" />
+            <Text style={styles.primaryBtnText}>Tạo Trận Đấu</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.secondaryBtn}
+            onPress={() => router.push('/(tabs)/my-matches' as never)}
+          >
+            <Ionicons name="trophy-outline" size={16} color="#aaa" />
+            <Text style={styles.secondaryBtnText}>Trận Của Tôi</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.secondaryBtn, { borderColor: '#ff4d4f55' }]}
+            onPress={() => {
+              logout();
+              router.replace('/(auth)');
+            }}
+          >
+            <Ionicons name="log-out-outline" size={16} color="#ff6b6b" />
+            <Text style={[styles.secondaryBtnText, { color: '#ff6b6b' }]}>Đăng Xuất</Text>
+          </Pressable>
+        </View>
+      )}
+
     </ScrollView>
   );
 }
 
-function Field({
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function FieldDisplay({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.fieldRow}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldValue}>{value || '—'}</Text>
+    </View>
+  );
+}
+
+function FieldInput({
   label,
   value,
   onChangeText,
-  editable,
-  multiline,
   keyboardType,
 }: {
   label: string;
   value: string;
-  onChangeText?: (text: string) => void;
-  editable?: boolean;
-  multiline?: boolean;
-  keyboardType?:
-    | 'default'
-    | 'email-address'
-    | 'numeric'
-    | 'phone-pad'
-    | 'number-pad'
-    | 'decimal-pad';
+  onChangeText: (t: string) => void;
+  keyboardType?: 'default' | 'email-address' | 'phone-pad';
 }) {
-  if (!editable) {
-    return (
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        <Text style={styles.fieldValue}>{value}</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.field}>
+    <View style={styles.fieldRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        style={[styles.input, multiline && styles.inputMultiline]}
+        style={styles.fieldInput}
         value={value}
         onChangeText={onChangeText}
-        editable={editable}
-        multiline={multiline}
         keyboardType={keyboardType}
-        placeholderTextColor="#777"
+        placeholderTextColor="#555"
       />
     </View>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-    </View>
-  );
-}
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const PRIMARY = '#ff4d4f';
+const BG = '#050505';
+const CARD = '#101010';
+const CARD2 = '#111';
+const BORDER = '#222';
+const TEXT = '#ffffff';
+const MUTED = '#888';
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050505',
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 120,
-  },
-  headerRow: {
+  container: { flex: 1, backgroundColor: BG },
+  content: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 100 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG },
+  loadingText: { color: MUTED, marginTop: 12, fontSize: 14 },
+
+  // page header
+  pageHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  menuBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#111',
+  pageTitle: { color: TEXT, fontSize: 22, fontWeight: '700' },
+  pageSubtitle: { color: MUTED, fontSize: 13, marginTop: 2 },
+  editToggleBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuIcon: {
-    color: '#aaa',
-    fontSize: 16,
-  },
-  editBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 6,
+    backgroundColor: PRIMARY,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#444',
   },
-  editBtnActive: {
-    borderColor: '#ff4d4f',
-    backgroundColor: '#111',
-  },
-  editText: {
-    color: '#aaa',
-    fontSize: 12,
-  },
-  editTextActive: {
-    color: '#ff4d4f',
-    fontWeight: '600',
-  },
+  cancelBtn: { backgroundColor: '#333' },
+  editToggleBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
+  // profile card
   profileCard: {
     alignItems: 'center',
+    backgroundColor: CARD,
+    borderRadius: 24,
     paddingVertical: 24,
-    marginBottom: 20,
-    borderRadius: 28,
-    backgroundColor: '#101010',
-    position: 'relative',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   avatarWrapper: {
+    width: 90,
+    height: 90,
     marginBottom: 12,
+    position: 'relative',
   },
-  avatarCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  avatarImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 3,
+    borderColor: `${PRIMARY}88`,
+  },
+  avatarFallback: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     backgroundColor: '#1a1a1a',
     borderWidth: 3,
-    borderColor: '#ff4d4f55',
+    borderColor: `${PRIMARY}55`,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 48,
-  },
-  avatarInitial: {
-    color: '#ffffff',
-    fontSize: 32,
-    fontWeight: '700',
-  },
+  avatarInitial: { color: TEXT, fontSize: 34, fontWeight: '700' },
   avatarBadge: {
     position: 'absolute',
-    right: 4,
-    bottom: 4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#ff4d4f',
+    bottom: 2,
+    right: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#050505',
+    borderColor: BG,
   },
-  avatarBadgeText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  profileName: {
-    color: '#fff',
-    fontSize: 20,
+  profileName: { color: TEXT, fontSize: 20, fontWeight: '700', marginBottom: 2 },
+  nameInput: {
+    color: TEXT,
+    fontSize: 18,
     fontWeight: '700',
+    borderBottomWidth: 1,
+    borderBottomColor: PRIMARY,
+    paddingVertical: 4,
+    textAlign: 'center',
+    minWidth: 160,
+    marginBottom: 4,
   },
   profileRole: {
     color: '#bbbbff',
@@ -424,13 +670,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
+  adminManageBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,77,79,0.6)',
+    backgroundColor: 'rgba(255,77,79,0.12)',
+  },
+  adminManageBtnPressed: {
+    opacity: 0.85,
+  },
+  adminManageBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   chipGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 14,
-    paddingHorizontal: 20,
     justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
   },
   chip: {
     paddingHorizontal: 10,
@@ -438,229 +703,222 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#181818',
     borderWidth: 1,
-    borderColor: '#ff4d4f55',
+    borderColor: `${PRIMARY}55`,
   },
-  chipText: {
-    color: '#ffb3b3',
-    fontSize: 11,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  mutedText: {
-    color: '#aaa',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  errorText: {
-    color: '#ff8888',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  matchPreviewCard: {
-    marginBottom: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#111',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#222',
-  },
-  pressedCard: {
-    opacity: 0.85,
-  },
-  matchPreviewTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 2,
-  },
-  matchPreviewTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-    flex: 1,
-  },
-  matchPreviewMeta: {
-    color: '#aaa',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  roleBadgeHost: {
-    backgroundColor: 'rgba(255, 77, 79, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 77, 79, 0.45)',
-  },
-  roleBadgeJoin: {
-    backgroundColor: 'rgba(120, 180, 255, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(120, 180, 255, 0.4)',
-  },
-  roleBadgeText: {
-    color: '#ccc',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  aboutText: {
-    color: '#dddddd',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  field: {
-    marginBottom: 10,
-  },
-  fieldLabel: {
-    color: '#aaa',
-    fontSize: 13,
-    marginBottom: 2,
-  },
-  fieldValue: {
-    color: '#ddd',
-    fontSize: 13,
-  },
-  input: {
-    backgroundColor: '#111',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    color: '#fff',
-    fontSize: 13,
-  },
-  inputMultiline: {
-    minHeight: 72,
-    textAlignVertical: 'top',
-  },
+  chipText: { color: '#ffb3b3', fontSize: 11 },
+
+  // stats
   statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 14,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#111',
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-  },
-  statLabel: {
-    color: '#aaa',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  statValue: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  listItem: {
-    color: '#ddd',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
-  addInput: {
-    flex: 1,
-  },
-  addBtn: {
-    width: 32,
-    height: 32,
+    backgroundColor: CARD2,
     borderRadius: 16,
-    backgroundColor: '#ff4d4f',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  saveBtn: {
-    marginTop: 4,
-    marginBottom: 16,
-    backgroundColor: '#ff4d4f',
-    borderRadius: 999,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  saveText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
-  },
-  actionsRowSingle: {
-    marginTop: 10,
-  },
-  actionBtn: {
-    flex: 1,
-  },
-  primaryBtn: {
-    backgroundColor: '#ff4d4f',
-    borderRadius: 999,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  primaryBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  secondaryBtn: {
-    borderRadius: 999,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: BORDER,
   },
-  secondaryBtnText: {
-    color: '#aaa',
-    fontWeight: '500',
-  },
-  scheduleGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  scheduleCard: {
-    flexBasis: '48%',
-    backgroundColor: '#111',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  scheduleDay: {
-    color: '#fff',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  scheduleTime: {
-    color: '#ffb3b3',
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  scheduleActivity: {
-    color: '#ddd',
-    fontSize: 12,
-  },
-});
+  statValue: { color: PRIMARY, fontSize: 18, fontWeight: '700' },
+  statLabel: { color: MUTED, fontSize: 10, marginTop: 2, textAlign: 'center' },
 
+  // section card
+  sectionCard: {
+    backgroundColor: CARD,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  sectionTitle: {
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+
+  // fields
+  fieldRow: { marginBottom: 10 },
+  fieldLabel: { color: MUTED, fontSize: 12, marginBottom: 4 },
+  fieldValue: { color: '#ddd', fontSize: 14, fontWeight: '500' },
+  fieldInput: {
+    backgroundColor: '#181818',
+    color: TEXT,
+    fontSize: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+
+  // list items (sports)
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#181818',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  listItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  listItemTitle: { color: TEXT, fontSize: 14, fontWeight: '600' },
+  levelBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: `${PRIMARY}22`,
+    borderWidth: 1,
+    borderColor: `${PRIMARY}55`,
+  },
+  levelBadgeText: { color: PRIMARY, fontSize: 11, fontWeight: '600' },
+  removeBtn: { padding: 4 },
+
+  // schedule items
+  scheduleItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#181818',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  scheduleItemLeft: { flex: 1 },
+  scheduleItemRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  scheduleActivity: { color: TEXT, fontSize: 13, fontWeight: '600' },
+  scheduleDay: { color: MUTED, fontSize: 12, marginTop: 2 },
+  scheduleTime: { color: PRIMARY, fontSize: 13, fontWeight: '600' },
+
+  // add block
+  addBlock: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    gap: 8,
+  },
+  addBlockTitle: { color: '#ccc', fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  addInput: {
+    backgroundColor: '#181818',
+    color: TEXT,
+    fontSize: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  levelPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#181818',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  levelPickerBtnText: { color: TEXT, fontSize: 13 },
+  levelOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#181818',
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  levelOptionActive: { borderColor: PRIMARY, backgroundColor: `${PRIMARY}18` },
+  levelOptionText: { color: MUTED, fontSize: 13 },
+  levelOptionTextActive: { color: PRIMARY, fontWeight: '600' },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: PRIMARY,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  addBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
+  emptyText: { color: MUTED, fontSize: 13 },
+
+  // save row
+  saveRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  saveBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: PRIMARY,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  cancelBtnFull: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  cancelBtnText: { color: '#aaa', fontWeight: '600', fontSize: 14 },
+
+  // actions
+  actionsBlock: { gap: 10, marginTop: 4 },
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: PRIMARY,
+    paddingVertical: 13,
+    borderRadius: 999,
+  },
+  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  secondaryBtnText: { color: '#aaa', fontWeight: '600', fontSize: 14 },
+
+  // match badge on schedule items
+  matchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,179,71,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,179,71,0.4)',
+  },
+  matchBadgeText: { color: '#ffb347', fontSize: 9, fontWeight: '700' },
+});

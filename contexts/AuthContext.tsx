@@ -23,7 +23,7 @@ export type AuthUser = {
     followers?: number;
   };
   sports?: { name: string; level: string }[];
-  schedule?: { day: string; time?: string; activity: string }[];
+  schedule?: { day: string; time?: string; activity: string; matchId?: string }[];
 };
 
 export type SuggestedPartner = {
@@ -64,6 +64,8 @@ type AuthContextValue = {
   }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   setUserFromServer: (user: AuthUser) => void;
+  /** Fetch lại dữ liệu user từ server và cập nhật AuthContext */
+  refreshUser: () => Promise<void>;
   /** Lấy danh sách partner gợi ý theo location */
   fetchSuggestedPartners: (options?: {
     maxDistance?: number;
@@ -83,7 +85,7 @@ function getApiBaseUrl() {
   const hostUri =
     Constants.expoConfig?.hostUri ||
     // fallback cho một số phiên bản Expo cũ
-    // @ts-expect-error manifest có thể không tồn tại trong type mới
+    // @ts-ignore manifest có thể không tồn tại trong type mới
     Constants.manifest?.hostUri;
 
   if (hostUri) {
@@ -195,6 +197,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const refreshUser: AuthContextValue['refreshUser'] = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(user.id)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      // Giữ nguyên id và role từ authUser hiện tại
+      setUser((prev) => (prev ? { ...prev, ...data, id: prev.id, role: prev.role } : prev));
+    } catch (e) {
+      console.warn('⚠️ refreshUser failed:', e);
+    }
+  };
+
   const fetchSuggestedPartners: AuthContextValue["fetchSuggestedPartners"] = async ({
     maxDistance = 10,
     limit = 20,
@@ -258,6 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetPassword,
     logout,
     setUserFromServer,
+    refreshUser,
     fetchSuggestedPartners,
   };
 

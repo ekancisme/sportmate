@@ -13,6 +13,8 @@ import {
     formatDateVi,
     type ApiMatch,
 } from '@/lib/matchApi';
+import { computeDisplayStatus } from '@/lib/matchStatus';
+import { StatusBadge } from '@/components/StatusBadge';
 
 const PRIMARY = '#ff4d4f';
 
@@ -126,10 +128,16 @@ export default function MyMatchesScreen({ embeddedInTab = false }: MyMatchesScre
             <View key={m.id} style={styles.card}>
               <Pressable
                 onPress={() => router.push({ pathname: '/match', params: { id: m.id } })}>
-                <View style={styles.cardTitleRow}>
+                <View style={[styles.cardTitleRow, { alignItems: 'center' }]}>
                   <Text style={styles.cardTitle}>{m.title}</Text>
-                  <View style={[styles.roleBadge, isHost ? styles.roleBadgeHost : styles.roleBadgeJoin]}>
-                    <Text style={styles.roleBadgeText}>{isHost ? 'Host' : 'Tham gia'}</Text>
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <StatusBadge
+                      status={computeDisplayStatus(m.status ?? 'active', m.date, m.time)}
+                      size="sm"
+                    />
+                    <View style={[styles.roleBadge, isHost ? styles.roleBadgeHost : styles.roleBadgeJoin]}>
+                      <Text style={styles.roleBadgeText}>{isHost ? 'Host' : 'Tham gia'}</Text>
+                    </View>
                   </View>
                 </View>
                 <Text style={styles.cardMeta}>
