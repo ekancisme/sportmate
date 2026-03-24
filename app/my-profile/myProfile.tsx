@@ -26,6 +26,8 @@ type UserProfile = {
   email: string;
   phone: string;
   avatar: string;
+  bio: string;
+  sports: UserSport[];
   stats: {
     matchesPlayed: number;
     matchesWon: number;
@@ -33,11 +35,8 @@ type UserProfile = {
     hoursActive: number;
     followers: number;
   };
-  sports: UserSport[];
   schedule: UserScheduleItem[];
 };
-
-const LEVELS = ['Cơ Bản', 'Trung Bình', 'Cao', 'Chuyên Nghiệp'];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -72,17 +71,10 @@ export default function MyProfile() {
   const [editData, setEditData] = useState<UserProfile | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // add-sport inputs
-  const [newSportName, setNewSportName] = useState('');
-  const [newSportLevelIdx, setNewSportLevelIdx] = useState(1); // default "Trung Bình"
-
   // add-schedule inputs
   const [newDay, setNewDay] = useState('');
   const [newTime, setNewTime] = useState('');
   const [newActivity, setNewActivity] = useState('');
-
-  // level picker visibility (sport)
-  const [showLevelPicker, setShowLevelPicker] = useState(false);
 
   // ── populate from authUser ──
   useEffect(() => {
@@ -92,6 +84,8 @@ export default function MyProfile() {
       email: authUser.email || '',
       phone: authUser.phone || '',
       avatar: authUser.avatar || '',
+      bio: authUser.bio || '',
+      sports: authUser.sports ?? [],
       stats: {
         matchesPlayed: authUser.stats?.matchesPlayed ?? 0,
         matchesWon: 0,
@@ -99,7 +93,6 @@ export default function MyProfile() {
         hoursActive: authUser.stats?.hoursActive ?? 0,
         followers: authUser.stats?.followers ?? 0,
       },
-      sports: authUser.sports ?? [],
       schedule: (authUser.schedule ?? []).map((s) => ({
         day: s.day,
         time: s.time ?? '',
@@ -133,6 +126,7 @@ export default function MyProfile() {
           name: editData.name,
           email: editData.email,
           phone: editData.phone,
+          bio: editData.bio,
           sports: editData.sports,
           schedule: editData.schedule,
         }),
@@ -149,25 +143,6 @@ export default function MyProfile() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const addSport = () => {
-    if (!newSportName.trim() || !editData) return;
-    setEditData({
-      ...editData,
-      sports: [
-        ...editData.sports,
-        { name: newSportName.trim(), level: LEVELS[newSportLevelIdx] },
-      ],
-    });
-    setNewSportName('');
-    setNewSportLevelIdx(1);
-    setShowLevelPicker(false);
-  };
-
-  const removeSport = (idx: number) => {
-    if (!editData) return;
-    setEditData({ ...editData, sports: editData.sports.filter((_, i) => i !== idx) });
   };
 
   const addSchedule = () => {
@@ -216,27 +191,15 @@ export default function MyProfile() {
           <Text style={styles.pageTitle}>Hồ Sơ Của Tôi</Text>
           <Text style={styles.pageSubtitle}>Quản lý thông tin cá nhân</Text>
         </View>
-
-        {role === 'admin' ? (
-          <Pressable
-            onPress={() => router.push('/admin')}
-            style={({ pressed }) => [styles.adminManageBtn, pressed && styles.adminManageBtnPressed]}>
-            <Ionicons name="shield-checkmark" size={18} color="#fff" />
-            <Text style={styles.adminManageBtnText}>Trang Quản Lý</Text>
-          </Pressable>
-        ) : null}
-
-        <Pressable
-          style={[styles.editToggleBtn, isEditing && styles.cancelBtn]}
-          onPress={isEditing ? handleCancel : handleEdit}
-        >
-          <Ionicons name={isEditing ? 'close' : 'create-outline'} size={16} color="#fff" />
-          <Text style={styles.editToggleBtnText}>{isEditing ? 'Hủy' : 'Chỉnh Sửa'}</Text>
-        </Pressable>
       </View>
 
       {/* ── Profile Card ── */}
       <View style={styles.profileCard}>
+        <Pressable
+          onPress={() => router.push('/my-profile/edit')}
+          style={({ pressed }) => [styles.changeProfileBtn, pressed && { opacity: 0.85 }]}>
+          <Ionicons name="settings" size={20} color={PRIMARY} />
+        </Pressable>
         {/* avatar */}
         <Pressable
           style={styles.avatarWrapper}
@@ -267,16 +230,29 @@ export default function MyProfile() {
           <Text style={styles.profileName}>{displayData.name}</Text>
         )}
         <Text style={styles.profileRole}>Người chơi SportMate</Text>
+        {role === 'admin' ? (
+          <Pressable
+            onPress={() => router.push('/admin')}
+            style={({ pressed }) => [styles.adminManageBtn, pressed && styles.adminManageBtnPressed]}>
+            <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            <Text style={styles.adminManageBtnText}>Trang Quản Lý</Text>
+          </Pressable>
+        ) : null}
 
-        {/* sport chips */}
         <View style={styles.chipGroup}>
-          {displayData.sports.map((s, i) => (
-            <View key={`${s.name}-${i}`} style={styles.chip}>
-              <Text style={styles.chipText}>
-                {s.name} • {s.level}
-              </Text>
+          {displayData.sports.length === 0 ? (
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>Chưa thêm môn thể thao</Text>
             </View>
-          ))}
+          ) : (
+            displayData.sports.map((s, i) => (
+              <View key={`${s.name}-${i}`} style={styles.chip}>
+                <Text style={styles.chipText}>
+                  {s.name} • {s.level}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
       </View>
 
@@ -313,75 +289,18 @@ export default function MyProfile() {
         )}
       </SectionCard>
 
-      {/* ── Môn Thể Thao ── */}
-      <SectionCard title="Môn Thể Thao">
-        {displayData.sports.length === 0 ? (
-          <Text style={styles.emptyText}>Chưa có môn thể thao nào</Text>
+      <SectionCard title="Giới Thiệu Bản Thân">
+        {isEditing ? (
+          <TextInput
+            style={[styles.fieldInput, styles.inputMultiline]}
+            value={editData!.bio}
+            onChangeText={(t) => setEditData({ ...editData!, bio: t })}
+            placeholder="Viết vài dòng giới thiệu về bạn..."
+            placeholderTextColor="#555"
+            multiline
+          />
         ) : (
-          displayData.sports.map((s, idx) => (
-            <View key={`sport-${idx}`} style={styles.listItem}>
-              <View style={styles.listItemLeft}>
-                <Text style={styles.listItemTitle}>{s.name}</Text>
-                <View style={styles.levelBadge}>
-                  <Text style={styles.levelBadgeText}>{s.level}</Text>
-                </View>
-              </View>
-              {isEditing && (
-                <Pressable onPress={() => removeSport(idx)} style={styles.removeBtn}>
-                  <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
-                </Pressable>
-              )}
-            </View>
-          ))
-        )}
-
-        {isEditing && (
-          <View style={styles.addBlock}>
-            <Text style={styles.addBlockTitle}>Thêm môn thể thao</Text>
-            <TextInput
-              style={styles.addInput}
-              placeholder="Tên môn (vd: Bóng Bàn)"
-              placeholderTextColor="#555"
-              value={newSportName}
-              onChangeText={setNewSportName}
-            />
-            {/* Level picker */}
-            <Pressable
-              style={styles.levelPickerBtn}
-              onPress={() => setShowLevelPicker(!showLevelPicker)}
-            >
-              <Text style={styles.levelPickerBtnText}>{LEVELS[newSportLevelIdx]}</Text>
-              <Ionicons
-                name={showLevelPicker ? 'chevron-up' : 'chevron-down'}
-                size={14}
-                color="#aaa"
-              />
-            </Pressable>
-            {showLevelPicker &&
-              LEVELS.map((lv, i) => (
-                <Pressable
-                  key={lv}
-                  style={[styles.levelOption, i === newSportLevelIdx && styles.levelOptionActive]}
-                  onPress={() => {
-                    setNewSportLevelIdx(i);
-                    setShowLevelPicker(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.levelOptionText,
-                      i === newSportLevelIdx && styles.levelOptionTextActive,
-                    ]}
-                  >
-                    {lv}
-                  </Text>
-                </Pressable>
-              ))}
-            <Pressable style={styles.addBtn} onPress={addSport}>
-              <Ionicons name="add" size={16} color="#fff" />
-              <Text style={styles.addBtnText}>Thêm Môn</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.fieldValue}>{displayData.bio || 'Chưa có giới thiệu bản thân.'}</Text>
         )}
       </SectionCard>
 
@@ -678,6 +597,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  bioWrap: {
+    marginTop: 12,
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  bioText: {
+    color: '#d5d5d5',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
   profileLink: {
     marginTop: 6,
     color: '#ff4d4f',
@@ -776,6 +711,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: BORDER,
+  },
+  inputMultiline: {
+    minHeight: 88,
+    textAlignVertical: 'top',
   },
 
   // list items (sports)
