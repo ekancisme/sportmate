@@ -459,14 +459,21 @@ export default function MatchDetailScreen() {
                     style={[styles.participantPage, { width: pageWidth }]}>
                     <View style={styles.participantGridPage}>
                       {page.map((p) => (
-                        <View
+                        <Pressable
                           key={p.id}
-                          style={[styles.participantCard, { width: participantCardWidth }]}>
+                          style={({ pressed }) => [
+                            styles.participantCard,
+                            { width: participantCardWidth },
+                            pressed && styles.pressed,
+                          ]}
+                          onPress={() =>
+                            router.push({ pathname: '/profile', params: { id: p.id } })
+                          }>
                           {p.avatarUrl ? (
                             <Image source={{ uri: p.avatarUrl }} style={styles.avatarImg} />
                           ) : (
                             <View style={styles.avatarPlaceholder}>
-                              <Ionicons name="image-outline" size={28} color={TEXT_DIM} />
+                              <Ionicons name="person-outline" size={28} color={TEXT_DIM} />
                             </View>
                           )}
                           <Text style={styles.participantName} numberOfLines={2}>
@@ -476,7 +483,11 @@ export default function MatchDetailScreen() {
                             style={[styles.participantSkill, { color: skillColor(p.level) }]}>
                             {skillLabelVi(p.level)}
                           </Text>
-                        </View>
+                          <View style={styles.viewProfileHint}>
+                            <Ionicons name="eye-outline" size={11} color={TEXT_DIM} />
+                            <Text style={styles.viewProfileHintText}>Xem profile</Text>
+                          </View>
+                        </Pressable>
                       ))}
                     </View>
                   </View>
@@ -929,5 +940,15 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
+  },
+  viewProfileHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 5,
+  },
+  viewProfileHintText: {
+    color: TEXT_DIM,
+    fontSize: 10,
   },
 });
