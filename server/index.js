@@ -73,30 +73,19 @@ io.on("connection", (socket) => {
   socket.on("send_message", async (data) => {
     try {
       const { senderId, receiverId, text } = data;
-      
-      // Save message to database
-      const newMessage = new Message({
-        senderId,
-        receiverId,
-        text,
-      });
+
+      // Save encrypted message to DB (pre-save hook in Message model does the encryption)
+      const newMessage = new Message({ senderId, receiverId, text });
       await newMessage.save();
 
-      // Convert to plain object with string IDs so client-side === comparison works
-      const msgPayload = {
-        _id: newMessage._id.toString(),
-        senderId: newMessage.senderId.toString(),
-        receiverId: newMessage.receiverId.toString(),
-        text: newMessage.text,
-        createdAt: newMessage.createdAt.toISOString(),
-        updatedAt: newMessage.updatedAt.toISOString(),
-      };
+      // Serialize to plain object with decrypted text + string IDs for client
+      const { serializeMessage } = require("./controllers/messageController");
+      const msgPayload = serializeMessage(newMessage);
 
-      // Emit to receiver's room
+      // Emit to both rooms (receiver sees it in real-time; sender gets confirmation)
       io.to(receiverId).emit("receive_message", msgPayload);
-      // Emit back to sender's room to confirm delivery
       io.to(senderId).emit("receive_message", msgPayload);
-      
+
     } catch (err) {
       console.error("Socket send_message error:", err);
     }

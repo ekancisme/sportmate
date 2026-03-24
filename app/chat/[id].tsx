@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -19,17 +19,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBase';
 import { fetchUserById, type ApiUser } from '@/lib/userApi';
 
-// Design tokens
-const PRIMARY = '#ff4d4f';
+// ── Design tokens ──────────────────────────────────────────────────────────
+const PRIMARY  = '#ff4d4f';
 const PRIMARY2 = '#ff6b6b';
-const BG = '#050505';
-const HEADER = '#100808';
-const CARD = '#0f0f0f';
-const CARD2 = '#141414';
-const BORDER = '#1f1f1f';
-const TEXT = '#ffffff';
-const MUTED = '#777777';
+const BG       = '#050505';
+const HEADER   = '#100808';
+const CARD     = '#0f0f0f';
+const CARD2    = '#141414';
+const BORDER   = '#1f1f1f';
+const TEXT     = '#ffffff';
+const MUTED    = '#777777';
 
+// ── Types ──────────────────────────────────────────────────────────────────
 type Message = {
   _id: string;
   senderId: string;
@@ -38,57 +39,110 @@ type Message = {
   createdAt: string;
 };
 
+/** Sort a message array chronologically. Returns a new array. */
+function sortByTime(msgs: Message[]): Message[] {
+  return [...msgs].sort((a, b) => {
+    const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (diff !== 0) return diff;
+    // Tiebreaker: MongoDB ObjectId strings are lexicographically monotone
+    return a._id.localeCompare(b._id);
+  });
+}
+
+// ── Component ──────────────────────────────────────────────────────────────
 export default function ChatScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>(); // other user's ID
+  const insets   = useSafeAreaInsets();
+  const router   = useRouter();
   const { user: currentUser } = useAuth();
-  
-  const [messages, setMessages] = useState<Message[]>([]);
+
+  // ── FIX: Normalize id — useLocalSearchParams may return string | string[]
+  const params = useLocalSearchParams<{ id: string }>();
+  const otherId = Array.isArray(params.id) ? params.id[0] : params.id;
+
+  const [messages,  setMessages]  = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [otherUser, setOtherUser] = useState<ApiUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const socketRef = useRef<Socket | null>(null);
+  const [loading,   setLoading]   = useState(true);
+
+  const socketRef   = useRef<Socket | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
-  useEffect(() => {
-    if (!currentUser?.id || !id) return;
-    
-    // Fetch other user profile
-    fetchUserById(id).then(setOtherUser).catch(console.error);
+  // ── FIX: Store current IDs in refs to avoid stale closures in socket callbacks
+  const currentUserIdRef = useRef(currentUser?.id ?? '');
+  const otherIdRef       = useRef(otherId ?? '');
+  // A set of temp IDs waiting to be replaced by confirmed server messages
+  const pendingIds       = useRef<Set<string>>(new Set());
 
-    // Fetch initial message history
+  // Keep refs in sync with latest values
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id ?? '';
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    otherIdRef.current = otherId ?? '';
+  }, [otherId]);
+
+  // ── Scroll helper ──────────────────────────────────────────────────────
+  const scrollToBottom = useCallback((animated = true) => {
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated }), 80);
+  }, []);
+
+  // ── Initial load + socket setup ────────────────────────────────────────
+  useEffect(() => {
+    if (!currentUser?.id || !otherId) return;
+
+    // Fetch other user's name/avatar
+    fetchUserById(otherId).then(setOtherUser).catch(console.error);
+
+    // Fetch message history via REST (sorted from server)
     const base = getApiBaseUrl();
-    fetch(`${base}/api/messages/${currentUser.id}/${id}`)
-      .then(res => res.json())
-      .then(data => {
-        setMessages(data || []);
+    fetch(`${base}/api/messages/${currentUser.id}/${otherId}`)
+      .then((r) => r.json())
+      .then((data: Message[]) => {
+        // Sort again on client as a safety net (server already sorts, but network may reorder)
+        setMessages(sortByTime(data || []));
         setLoading(false);
+        scrollToBottom(false);
       })
-      .catch(err => {
-        console.error("Failed to fetch messages:", err);
+      .catch((err) => {
+        console.error('Failed to fetch messages:', err);
         setLoading(false);
       });
 
-    // Initialize socket connection
-    const socket = io(base);
+    // ── Socket connect ─────────────────────────────────────────────────
+    const socket = io(base, {
+      transports: ['websocket'], // avoid polling fallback delay
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('Connected to socket, joining room:', currentUser.id);
+      // Join the current user's personal room
       socket.emit('join_room', currentUser.id);
     });
 
-    socket.on('receive_message', (msg: Message) => {
-      const isMine = msg.senderId === currentUser.id && msg.receiverId === id;
-      const isTheirs = msg.senderId === id && msg.receiverId === currentUser.id;
+    socket.on('reconnect', () => {
+      // Re-join room after reconnect
+      socket.emit('join_room', currentUserIdRef.current);
+    });
 
-      if (!isMine && !isTheirs) return; // not this conversation
+    // ── FIX: Read IDs from refs (not closure) to avoid stale values ───
+    socket.on('receive_message', (msg: Message) => {
+      const myId    = currentUserIdRef.current;
+      const theirId = otherIdRef.current;
+
+      if (!myId || !theirId) return;
+
+      const isMine   = msg.senderId === myId   && msg.receiverId === theirId;
+      const isTheirs = msg.senderId === theirId && msg.receiverId === myId;
+
+      if (!isMine && !isTheirs) return; // belongs to a different conversation
 
       if (isMine) {
-        // Replace the optimistic temp message with the real one from server
+        // Replace the optimistic temp message that was shown immediately on send
         setMessages((prev) => {
-          // Find if there's a pending temp message to swap out
           const tempIdx = prev.findIndex(
             (m) => m._id.startsWith('temp_') && pendingIds.current.size > 0
           );
@@ -97,71 +151,84 @@ export default function ChatScreen() {
             pendingIds.current.delete(tempId);
             const updated = [...prev];
             updated[tempIdx] = msg;
-            return updated;
+            return sortByTime(updated); // re-sort after replace
           }
-          // No temp message to replace, just append (shouldn't happen normally)
-          return [...prev, msg];
+          // Shouldn't normally reach here, but handle gracefully
+          return sortByTime([...prev, msg]);
         });
       } else {
-        // Message from the other user — append
-        setMessages((prev) => [...prev, msg]);
+        // Incoming message from the other person
+        setMessages((prev) => {
+          // Dedup: skip if we already have this _id
+          if (prev.some((m) => m._id === msg._id)) return prev;
+          return sortByTime([...prev, msg]);
+        });
       }
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+      scrollToBottom();
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [currentUser?.id, id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, otherId]);
 
-  const pendingIds = useRef<Set<string>>(new Set());
-
+  // ── Send message with optimistic update ───────────────────────────────
   const sendMessage = () => {
-    if (!inputText.trim() || !currentUser?.id || !id) return;
+    if (!inputText.trim() || !currentUser?.id || !otherId) return;
 
     const socket = socketRef.current;
-    if (socket && socket.connected) {
-      const tempId = `temp_${Date.now()}`;
-      const optimisticMsg: Message = {
-        _id: tempId,
-        senderId: currentUser.id,
-        receiverId: id,
-        text: inputText.trim(),
-        createdAt: new Date().toISOString(),
-      };
+    if (!socket?.connected) return;
 
-      // Track this tempId so when the server echoes back we can replace it
-      pendingIds.current.add(tempId);
+    const tempId = `temp_${Date.now()}_${Math.random()}`;
+    const optimisticMsg: Message = {
+      _id: tempId,
+      senderId: currentUser.id,
+      receiverId: otherId,
+      text: inputText.trim(),
+      createdAt: new Date().toISOString(),
+    };
 
-      // Show immediately in UI
-      setMessages((prev) => [...prev, optimisticMsg]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    pendingIds.current.add(tempId);
 
-      socket.emit('send_message', {
-        senderId: currentUser.id,
-        receiverId: id,
-        text: inputText.trim(),
-      });
-      setInputText('');
-    }
+    // Show immediately (optimistic UI)
+    setMessages((prev) => [...prev, optimisticMsg]);
+    scrollToBottom();
+
+    socket.emit('send_message', {
+      senderId: currentUser.id,
+      receiverId: otherId,
+      text: inputText.trim(),
+    });
+    setInputText('');
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.senderId === currentUser?.id;
+  // ── Render single message bubble ───────────────────────────────────────
+  const renderMessage = useCallback(({ item }: { item: Message }) => {
+    const isMe     = item.senderId === currentUser?.id;
+    const isPending = item._id.startsWith('temp_');
     return (
       <View style={[styles.messageRow, isMe ? styles.messageMe : styles.messageOther]}>
-        <View style={[styles.messageBubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+        <View style={[
+          styles.messageBubble,
+          isMe ? styles.bubbleMe : styles.bubbleOther,
+          isPending && { opacity: 0.7 },
+        ]}>
           <Text style={styles.messageText}>{item.text}</Text>
         </View>
       </View>
     );
-  };
+  }, [currentUser?.id]);
 
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}>
+
+      {/* Top Bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
         <Pressable
           style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
@@ -170,12 +237,13 @@ export default function ChatScreen() {
         </Pressable>
         <View style={styles.topBarTitleContainer}>
           <Text style={styles.topBarTitle} numberOfLines={1}>
-            {otherUser?.name || 'Đang tải...'}
+            {otherUser?.name ?? 'Đang tải...'}
           </Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
-      
+
+      {/* Messages list */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={PRIMARY} size="large" />
@@ -184,15 +252,16 @@ export default function ChatScreen() {
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item, index) => item._id || String(index)}
+          keyExtractor={(item) => item._id}
           renderItem={renderMessage}
           contentContainerStyle={styles.listContent}
           keyboardDismissMode="on-drag"
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          onContentSizeChange={() => scrollToBottom(false)}
+          onLayout={() => scrollToBottom(false)}
         />
       )}
 
+      {/* Input bar */}
       <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <TextInput
           style={styles.input}
@@ -201,6 +270,8 @@ export default function ChatScreen() {
           value={inputText}
           onChangeText={setInputText}
           multiline
+          onSubmitEditing={sendMessage}
+          blurOnSubmit={false}
         />
         <Pressable
           style={({ pressed }) => [styles.sendBtn, pressed && { opacity: 0.7 }]}
@@ -212,10 +283,11 @@ export default function ChatScreen() {
   );
 }
 
+// ── Styles ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  
+
   // top bar
   topBar: {
     flexDirection: 'row',
@@ -240,21 +312,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // chat list
+  // message list
   listContent: {
     padding: 16,
-    gap: 12,
+    paddingBottom: 8,
   },
   messageRow: {
     flexDirection: 'row',
     marginBottom: 8,
   },
-  messageMe: {
-    justifyContent: 'flex-end',
-  },
-  messageOther: {
-    justifyContent: 'flex-start',
-  },
+  messageMe:    { justifyContent: 'flex-end' },
+  messageOther: { justifyContent: 'flex-start' },
   messageBubble: {
     maxWidth: '80%',
     paddingHorizontal: 16,
@@ -277,7 +345,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // input
+  // input bar
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,7 +376,6 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
-    transform: [{ translateX: -2 }, { translateY: -2 }],
     shadowColor: PRIMARY,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
