@@ -80,14 +80,33 @@ export default function ChatScreen() {
     });
 
     socket.on('receive_message', (msg: Message) => {
-      // Allow only messages related to this conversation
-      if (
-        (msg.senderId === currentUser.id && msg.receiverId === id) ||
-        (msg.senderId === id && msg.receiverId === currentUser.id)
-      ) {
+      const isMine = msg.senderId === currentUser.id && msg.receiverId === id;
+      const isTheirs = msg.senderId === id && msg.receiverId === currentUser.id;
+
+      if (!isMine && !isTheirs) return; // not this conversation
+
+      if (isMine) {
+        // Replace the optimistic temp message with the real one from server
+        setMessages((prev) => {
+          // Find if there's a pending temp message to swap out
+          const tempIdx = prev.findIndex(
+            (m) => m._id.startsWith('temp_') && pendingIds.current.size > 0
+          );
+          if (tempIdx !== -1) {
+            const tempId = prev[tempIdx]._id;
+            pendingIds.current.delete(tempId);
+            const updated = [...prev];
+            updated[tempIdx] = msg;
+            return updated;
+          }
+          // No temp message to replace, just append (shouldn't happen normally)
+          return [...prev, msg];
+        });
+      } else {
+        // Message from the other user — append
         setMessages((prev) => [...prev, msg]);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
       }
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     });
 
     return () => {
@@ -95,19 +114,34 @@ export default function ChatScreen() {
     };
   }, [currentUser?.id, id]);
 
+  const pendingIds = useRef<Set<string>>(new Set());
+
   const sendMessage = () => {
     if (!inputText.trim() || !currentUser?.id || !id) return;
 
     const socket = socketRef.current;
-    if (socket) {
-      const newMsgObj = {
+    if (socket && socket.connected) {
+      const tempId = `temp_${Date.now()}`;
+      const optimisticMsg: Message = {
+        _id: tempId,
         senderId: currentUser.id,
         receiverId: id,
         text: inputText.trim(),
+        createdAt: new Date().toISOString(),
       };
-      // Optimistic update isn't strictly necessary since backend emits to sender too, 
-      // but waiting for receive_message provides better consistency. Let's just emit.
-      socket.emit('send_message', newMsgObj);
+
+      // Track this tempId so when the server echoes back we can replace it
+      pendingIds.current.add(tempId);
+
+      // Show immediately in UI
+      setMessages((prev) => [...prev, optimisticMsg]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+
+      socket.emit('send_message', {
+        senderId: currentUser.id,
+        receiverId: id,
+        text: inputText.trim(),
+      });
       setInputText('');
     }
   };
@@ -126,7 +160,8 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}>
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
         <Pressable
           style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.7 }]}
@@ -152,6 +187,7 @@ export default function ChatScreen() {
           keyExtractor={(item, index) => item._id || String(index)}
           renderItem={renderMessage}
           contentContainerStyle={styles.listContent}
+          keyboardDismissMode="on-drag"
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
         />

@@ -82,10 +82,20 @@ io.on("connection", (socket) => {
       });
       await newMessage.save();
 
+      // Convert to plain object with string IDs so client-side === comparison works
+      const msgPayload = {
+        _id: newMessage._id.toString(),
+        senderId: newMessage.senderId.toString(),
+        receiverId: newMessage.receiverId.toString(),
+        text: newMessage.text,
+        createdAt: newMessage.createdAt.toISOString(),
+        updatedAt: newMessage.updatedAt.toISOString(),
+      };
+
       // Emit to receiver's room
-      io.to(receiverId).emit("receive_message", newMessage);
-      // Emit back to sender's room to confirm sending
-      io.to(senderId).emit("receive_message", newMessage);
+      io.to(receiverId).emit("receive_message", msgPayload);
+      // Emit back to sender's room to confirm delivery
+      io.to(senderId).emit("receive_message", msgPayload);
       
     } catch (err) {
       console.error("Socket send_message error:", err);
