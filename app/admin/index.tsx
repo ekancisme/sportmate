@@ -16,13 +16,19 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
 import {
   approveVenue,
+  banUserByAdminReport,
+  fetchAdminReportDetail,
+  fetchAdminReports,
   fetchAdminStats,
   fetchAdminUsers,
   fetchAdminVenues,
   fetchPendingVenues,
   rejectVenue,
+  sendAdminReportWarning,
   setAdminUserBan,
   updateAdminMatch,
+  type AdminReport,
+  type AdminReportStatus,
   type AdminStats,
   type AdminUser,
   type AdminVenue,
@@ -54,6 +60,12 @@ function courtApprovalLabel(s: CourtApprovalStatus | undefined) {
   if (s === 'active') return 'Đã duyệt';
   if (s === 'rejected') return 'Từ chối';
   return 'Chờ duyệt';
+}
+
+function reportStatusLabel(status: AdminReportStatus) {
+  if (status === 'pending') return 'Chờ xử lý';
+  if (status === 'reviewed') return 'Đã xem';
+  return 'Đã xử lý';
 }
 
 export default function AdminDashboard() {
@@ -117,9 +129,13 @@ export default function AdminDashboard() {
   }, [role]);
 
   const canManage = role === 'admin';
-  type AdminSubTab = 'dashboard' | 'users' | 'venues' | 'matches';
+  type AdminSubTab = 'dashboard' | 'users' | 'venues' | 'matches' | 'reports';
   const [adminSubTab, setAdminSubTab] = useState<AdminSubTab>('dashboard');
   const adminId = authUser?.id ?? '';
+  const [reports, setReports] = useState<AdminReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsErr, setReportsErr] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<AdminReport | null>(null);
 
   useEffect(() => {
     if (role !== 'admin') return;
@@ -138,6 +154,24 @@ export default function AdminDashboard() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminSubTab, role]);
+
+  useEffect(() => {
+    if (role !== 'admin') return;
+    if (adminSubTab !== 'reports') return;
+    (async () => {
+      setReportsLoading(true);
+      setReportsErr(null);
+      try {
+        const list = await fetchAdminReports();
+        setReports(list);
+      } catch (e) {
+        setReportsErr(e instanceof Error ? e.message : 'Không tải được report');
+        setReports([]);
+      } finally {
+        setReportsLoading(false);
+      }
+    })();
   }, [adminSubTab, role]);
 
   const onBanUser = async (userId: string, nextIsBanned: boolean) => {
@@ -202,6 +236,54 @@ export default function AdminDashboard() {
       show('Đã duyệt', 'Sân đã được duyệt và hiển thị public.', { variant: 'info' });
     } catch (e) {
       show('Lỗi', e instanceof Error ? e.message : 'Duyệt thất bại', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onOpenReportDetail = async (reportId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const detail = await fetchAdminReportDetail(reportId);
+      setSelectedReport(detail);
+    } catch (e) {
+      show('Lỗi', e instanceof Error ? e.message : 'Không tải được chi tiết report', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onSendReportWarning = async () => {
+    if (!selectedReport) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await sendAdminReportWarning(selectedReport.id);
+      setSelectedReport(null);
+      const list = await fetchAdminReports();
+      setReports(list);
+      show('Thành công', 'Gửi mail cảnh báo thành công.', { variant: 'info' });
+    } catch (e) {
+      show('Lỗi', e instanceof Error ? e.message : 'Gửi cảnh báo thất bại', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onBanFromReport = async () => {
+    if (!selectedReport) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await banUserByAdminReport(selectedReport.id);
+      setSelectedReport(updated);
+      await reloadAll();
+      const list = await fetchAdminReports();
+      setReports(list);
+      show('Thành công', 'Đã ban user từ report.', { variant: 'info' });
+    } catch (e) {
+      show('Lỗi', e instanceof Error ? e.message : 'Ban thất bại', { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -492,6 +574,61 @@ export default function AdminDashboard() {
         </View>
       ) : null}
 
+      {adminSubTab === 'reports' ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Report người chơi</Text>
+          {reportsLoading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator color={PRIMARY} />
+              <Text style={styles.loadingText}>Đang tải...</Text>
+            </View>
+          ) : reportsErr ? (
+            <Text style={styles.errorText}>{reportsErr}</Text>
+          ) : (
+            <View style={{ marginTop: 12 }}>
+              {reports.length === 0 ? (
+                <Text style={styles.mutedText}>Chưa có report nào.</Text>
+              ) : (
+                reports.map((r) => (
+                  <Pressable
+                    key={r.id}
+                    onPress={() => onOpenReportDetail(r.id)}
+                    style={({ pressed }) => [styles.listCard, pressed && { opacity: 0.9 }]}>
+                    <View style={styles.listTopRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.listTitle}>
+                          User bị report: {r.reportedUser?.name || 'Không rõ'}{' '}
+                          <Text style={styles.listMeta}>({r.reportedUser?.id || '—'})</Text>
+                        </Text>
+                        <Text style={styles.listMeta}>Người report: {r.reporter?.name || 'Không rõ'}</Text>
+                        {r.match?.title ? <Text style={styles.listMeta}>Trận: {r.match.title}</Text> : null}
+                        <Text style={styles.listMeta}>Lý do: {r.reason}</Text>
+                        <Text style={styles.listMeta}>
+                          Thời gian: {r.createdAt ? new Date(r.createdAt).toLocaleString('vi-VN') : '—'}
+                        </Text>
+                      </View>
+                      <View>
+                        <View
+                          style={[
+                            styles.pill,
+                            r.status === 'resolved'
+                              ? styles.pillApproved
+                              : r.status === 'reviewed'
+                                ? styles.pillRejected
+                                : styles.pillPending,
+                          ]}>
+                          <Text style={styles.pillText}>{reportStatusLabel(r.status)}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          )}
+        </View>
+      ) : null}
+
       {AppAlertNode}
       </ScrollView>
       <View style={styles.subTabsBar}>
@@ -563,7 +700,79 @@ export default function AdminDashboard() {
             Trận đấu
           </Text>
         </Pressable>
+        <Pressable
+          onPress={() => setAdminSubTab('reports')}
+          style={({ pressed }) => [
+            styles.subTabBtn,
+            adminSubTab === 'reports' && styles.subTabBtnActive,
+            pressed && { opacity: 0.9 },
+          ]}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={18}
+            color={adminSubTab === 'reports' ? PRIMARY : '#888'}
+          />
+          <Text style={[styles.subTabLabel, adminSubTab === 'reports' && styles.subTabLabelActive]}>
+            Report
+          </Text>
+        </Pressable>
       </View>
+
+      <Modal
+        visible={selectedReport !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedReport(null)}>
+        {selectedReport ? (
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>Chi tiết report</Text>
+                <Pressable style={styles.modalCloseBtn} onPress={() => setSelectedReport(null)}>
+                  <Text style={styles.modalCloseBtnText}>X</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.modalMeta}>
+                Trạng thái: {reportStatusLabel(selectedReport.status)}
+                {selectedReport.resolvedAction ? ` • Hành động: ${selectedReport.resolvedAction}` : ''}
+              </Text>
+              <Text style={styles.modalMeta}>
+                Người report: {selectedReport.reporter?.name || 'Không rõ'} (@
+                {selectedReport.reporter?.username || '—'})
+              </Text>
+              <Text style={styles.modalMeta}>
+                User bị report: {selectedReport.reportedUser?.name || 'Không rõ'} (@
+                {selectedReport.reportedUser?.username || '—'})
+              </Text>
+              {selectedReport.match?.title ? (
+                <Text style={styles.modalMeta}>
+                  Trận: {selectedReport.match.title} • {selectedReport.match.date || '—'} •{' '}
+                  {selectedReport.match.time || '—'}
+                </Text>
+              ) : null}
+              <Text style={styles.modalBodyText}>Lý do: {selectedReport.reason || 'Không có'}</Text>
+              <Text style={styles.modalMeta}>
+                Mẫu mail cảnh báo sẽ tự tạo theo lý do report và gửi dưới dạng Cảnh báo lần 1.
+              </Text>
+
+              <View style={styles.modalActionsRow}>
+                <Pressable style={[styles.actionBtn, styles.actionBtnSecondary]} onPress={onSendReportWarning}>
+                  <Text style={styles.actionBtnText}>Gửi cảnh báo mail</Text>
+                </Pressable>
+                <Pressable style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={onBanFromReport}>
+                  <Text style={styles.actionBtnText}>Ban user</Text>
+                </Pressable>
+              </View>
+
+              <View style={{ height: 8 }} />
+              <Pressable style={styles.actionBtn} onPress={() => setSelectedReport(null)}>
+                <Text style={styles.actionBtnText}>Đóng</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </Modal>
 
       <Modal
         visible={selectedUser !== null}

@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -21,8 +23,10 @@ import {
   fetchMatchById,
   formatDateVi,
   joinMatch,
+  checkJoinMatch,
   leaveMatch,
   mapApiMatchToDetail,
+  reportParticipant,
   type MatchDetail,
 } from '@/lib/matchApi';
 import { computeDisplayStatus } from '@/lib/matchStatus';
@@ -68,6 +72,10 @@ export default function MatchDetailScreen() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ id: string; name: string } | null>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,18 +213,98 @@ export default function MatchDetailScreen() {
       });
       return;
     }
-    setJoinBusy(true);
+
+    const doJoin = async () => {
+      setJoinBusy(true);
+      try {
+        const raw = await joinMatch(match.id, user.id);
+        setBaseMatch(mapApiMatchToDetail(raw));
+        // Cập nhật lịch trình trong AuthContext để profile hiển thị ngay
+        void refreshUser();
+      } catch (e) {
+        show('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại', {
+          variant: 'error',
+        });
+      } finally {
+        setJoinBusy(false);
+      }
+    };
+
     try {
-      const raw = await joinMatch(match.id, user.id);
-      setBaseMatch(mapApiMatchToDetail(raw));
-      // Cập nhật lịch trình trong AuthContext để profile hiển thị ngay
-      void refreshUser();
+      const check = await checkJoinMatch(match.id, user.id);
+
+      if (!check.allow && check.reason === 'overlap') {
+        show(
+          'Trùng khung giờ',
+          'Bạn đã có trận khác trùng khung giờ trong ngày này. Không thể tham gia.',
+          { variant: 'error' },
+        );
+        return;
+      }
+
+      if (check.reason === 'hasOtherMatch') {
+        show(
+          'Trong ngày hôm nay',
+          'Bạn đang có trận khác (không trùng giờ). Bạn có muốn tham gia trận này không?',
+          {
+            variant: 'info',
+            confirmLabel: 'Tham gia',
+            cancelLabel: 'Hủy',
+            onConfirm: () => {
+              void doJoin();
+            },
+          },
+        );
+        return;
+      }
+
+      await doJoin();
     } catch (e) {
-      show('Lỗi', e instanceof Error ? e.message : 'Thao tác thất bại', {
+      show(
+        'Lỗi',
+        e instanceof Error ? e.message : 'Không thể kiểm tra lịch tham gia',
+        { variant: 'error' },
+      );
+    }
+  };
+
+  const openReportModal = (participant: { id: string; name: string }) => {
+    if (!isHost || !user?.id || participant.id === user.id) return;
+    setReportTarget(participant);
+    setReportReason('');
+    setReportModalVisible(true);
+  };
+
+  const closeReportModal = () => {
+    if (reportBusy) return;
+    setReportModalVisible(false);
+    setReportTarget(null);
+    setReportReason('');
+  };
+
+  const submitReport = async () => {
+    if (!isHost || !user?.id || !reportTarget) return;
+    const reasonTrim = reportReason.trim();
+    if (reasonTrim.length < 5) {
+      show('Thiếu lý do', 'Vui lòng nhập lý do report ít nhất 5 ký tự.', {
+        variant: 'error',
+      });
+      return;
+    }
+
+    setReportBusy(true);
+    try {
+      await reportParticipant(match.id, user.id, reportTarget.id, reasonTrim);
+      setReportModalVisible(false);
+      setReportTarget(null);
+      setReportReason('');
+      show('Đã gửi report', 'Report đã được lưu vào hệ thống.', { variant: 'success' });
+    } catch (e) {
+      show('Không gửi được report', e instanceof Error ? e.message : 'Vui lòng thử lại', {
         variant: 'error',
       });
     } finally {
-      setJoinBusy(false);
+      setReportBusy(false);
     }
   };
 
@@ -240,6 +328,18 @@ export default function MatchDetailScreen() {
               <Text style={styles.heroSubtitle}>{match.sportLabelVi}</Text>
             </View>
             <View style={styles.heroActions}>
+              {isHost ? (
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: '/match/create-match',
+                      params: { editId: match.id },
+                    })
+                  }
+                  style={({ pressed }) => [styles.iconBox, pressed && styles.pressed]}>
+                  <Ionicons name="create-outline" size={22} color={PRIMARY} />
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={toggleFavorite}
                 style={({ pressed }) => [styles.iconBox, pressed && styles.pressed]}>
@@ -304,21 +404,6 @@ export default function MatchDetailScreen() {
               </View>
             </View>
           </View>
-
-          {isHost ? (
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: '/match/create-match',
-                  params: { editId: match.id },
-                })
-              }
-              style={({ pressed }) => [styles.hostEditRow, pressed && styles.pressed]}>
-              <Ionicons name="create-outline" size={22} color={PRIMARY} />
-              <Text style={styles.hostEditText}>Chỉnh sửa trận đấu</Text>
-              <Ionicons name="chevron-forward" size={20} color={TEXT_DIM} />
-            </Pressable>
-          ) : null}
 
           <View style={styles.card}>
             <Text style={styles.statusLabel}>Tình trạng</Text>
@@ -437,6 +522,11 @@ export default function MatchDetailScreen() {
           <Text style={styles.sectionHeading}>
             Những Người Tham Gia ({match.participants.length})
           </Text>
+          {isHost ? (
+            <Text style={styles.hostHintText}>
+              Host: Nhấn giữ vào người tham gia để report.
+            </Text>
+          ) : null}
           {participantPages.length > 0 ? (
             <>
               <ScrollView
@@ -468,7 +558,9 @@ export default function MatchDetailScreen() {
                           ]}
                           onPress={() =>
                             router.push({ pathname: '/profile', params: { id: p.id } })
-                          }>
+                          }
+                          onLongPress={() => openReportModal({ id: p.id, name: p.name })}
+                          delayLongPress={350}>
                           {p.avatarUrl ? (
                             <Image source={{ uri: p.avatarUrl }} style={styles.avatarImg} />
                           ) : (
@@ -538,6 +630,47 @@ export default function MatchDetailScreen() {
           </View>
         </View>
       </ScrollView>
+      <Modal
+        visible={reportModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeReportModal}>
+        <View style={styles.reportModalBackdrop}>
+          <View style={styles.reportModalCard}>
+            <Text style={styles.reportModalTitle}>Report người tham gia</Text>
+            <Text style={styles.reportModalSub}>
+              Người bị report: {reportTarget?.name ?? '—'}
+            </Text>
+            <TextInput
+              value={reportReason}
+              onChangeText={setReportReason}
+              placeholder="Nhập lý do report..."
+              placeholderTextColor="#888"
+              style={styles.reportInput}
+              multiline
+              editable={!reportBusy}
+            />
+            <View style={styles.reportActions}>
+              <Pressable
+                style={[styles.reportBtn, styles.reportBtnCancel]}
+                disabled={reportBusy}
+                onPress={closeReportModal}>
+                <Text style={styles.reportBtnCancelText}>Hủy</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.reportBtn, styles.reportBtnSubmit, reportBusy && styles.reportBtnDisabled]}
+                disabled={reportBusy}
+                onPress={() => {
+                  void submitReport();
+                }}>
+                <Text style={styles.reportBtnSubmitText}>
+                  {reportBusy ? 'Đang gửi...' : 'Gửi report'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       {AppAlertNode}
     </View>
   );
@@ -717,6 +850,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 10,
   },
+  hostHintText: {
+    color: '#b7b7b7',
+    fontSize: 12,
+    marginBottom: 10,
+  },
   participantPager: {
     alignSelf: 'center',
   },
@@ -888,6 +1026,78 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+  },
+  reportModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  reportModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#141414',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#2b2b2b',
+    padding: 16,
+  },
+  reportModalTitle: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  reportModalSub: {
+    color: '#b5b5b5',
+    fontSize: 13,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  reportInput: {
+    minHeight: 96,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#333',
+    backgroundColor: '#0f0f0f',
+    color: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlignVertical: 'top',
+    fontSize: 14,
+  },
+  reportActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  reportBtn: {
+    flex: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+  },
+  reportBtnCancel: {
+    borderWidth: 1,
+    borderColor: '#555',
+    backgroundColor: '#1a1a1a',
+  },
+  reportBtnCancelText: {
+    color: '#ddd',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  reportBtnSubmit: {
+    backgroundColor: PRIMARY,
+  },
+  reportBtnSubmitText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  reportBtnDisabled: {
+    opacity: 0.7,
   },
   mapContainer: {
     borderRadius: 12,

@@ -4,6 +4,8 @@ const Court = require('../models/Court');
 const User = require('../models/User');
 const Match = require('../models/Match');
 const Venue = require('../models/Venue');
+const Report = require('../models/Report');
+const { sendMail } = require('../utils/mail');
 const { matchJsonWithHost } = require('../utils/matchJson');
 
 function assertValidObjectId(id, name = 'id') {
@@ -139,32 +141,7 @@ async function updateUserBan(req, res) {
     );
     if (!user) return res.status(404).json({ error: 'Không tìm thấy user' });
 
-    if (isBanned) {
-      // Gỡ user bị ban khỏi tất cả trận đã tham gia.
-      const joinedMatches = await Match.find({ participantIds: uid }).select(
-        '_id participantIds winners currentPlayers',
-      );
-      for (const m of joinedMatches) {
-        const nextParticipants = (m.participantIds || []).filter((p) => !p.equals(uid));
-        const nextWinners = (m.winners || []).filter((w) => !w.equals(uid));
-        m.participantIds = nextParticipants;
-        m.winners = nextWinners;
-        m.currentPlayers = nextParticipants.length;
-        await m.save();
-      }
-
-      // Nếu là host của trận đang mở, hủy trận để tránh user bị ban vẫn đứng host.
-      await Match.updateMany(
-        { hostId: uid, status: 'active' },
-        {
-          $set: {
-            status: 'cancelled',
-            winners: [],
-            cancelReason: 'Trận bị hủy do tài khoản host đã bị khóa bởi quản trị viên',
-          },
-        },
-      );
-    }
+    if (isBanned) await applyBanConsequences(uid);
 
     return res.json(user.toJSON());
   } catch (error) {
@@ -172,6 +149,209 @@ async function updateUserBan(req, res) {
     console.error('❌ PATCH /api/admin/users/:id/ban', error);
     const statusCode = error?.statusCode ?? 500;
     return res.status(statusCode).json({ error: error?.message || 'Cập nhật ban thất bại' });
+  }
+}
+
+async function applyBanConsequences(uid) {
+  // Gỡ user bị ban khỏi tất cả trận đã tham gia.
+  const joinedMatches = await Match.find({ participantIds: uid }).select(
+    '_id participantIds winners currentPlayers',
+  );
+  for (const m of joinedMatches) {
+    const nextParticipants = (m.participantIds || []).filter((p) => !p.equals(uid));
+    const nextWinners = (m.winners || []).filter((w) => !w.equals(uid));
+    m.participantIds = nextParticipants;
+    m.winners = nextWinners;
+    m.currentPlayers = nextParticipants.length;
+    await m.save();
+  }
+
+  // Nếu là host của trận đang mở, hủy trận để tránh user bị ban vẫn đứng host.
+  await Match.updateMany(
+    { hostId: uid, status: 'active' },
+    {
+      $set: {
+        status: 'cancelled',
+        winners: [],
+        cancelReason: 'Trận bị hủy do tài khoản host đã bị khóa bởi quản trị viên',
+      },
+    },
+  );
+}
+
+function reportToJson(r) {
+  return {
+    id: String(r._id),
+    reason: r.reason || '',
+    status: r.status || 'pending',
+    warningSentAt: r.warningSentAt || null,
+    warningNote: r.warningNote || '',
+    resolvedAt: r.resolvedAt || null,
+    resolvedAction: r.resolvedAction || '',
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    match: r.matchId
+      ? {
+          id: String(r.matchId._id || r.matchId.id || ''),
+          title: r.matchId.title || '',
+          date: r.matchId.date || '',
+          time: r.matchId.time || '',
+        }
+      : null,
+    reporter: r.reporterHostId
+      ? {
+          id: String(r.reporterHostId._id || r.reporterHostId.id || ''),
+          name: r.reporterHostId.name || r.reporterHostId.username || '',
+          username: r.reporterHostId.username || '',
+          email: r.reporterHostId.email || '',
+        }
+      : null,
+    reportedUser: r.reportedUserId
+      ? {
+          id: String(r.reportedUserId._id || r.reportedUserId.id || ''),
+          name: r.reportedUserId.name || r.reportedUserId.username || '',
+          username: r.reportedUserId.username || '',
+          email: r.reportedUserId.email || '',
+          isBanned: !!r.reportedUserId.isBanned,
+        }
+      : null,
+  };
+}
+
+async function listReports(_req, res) {
+  try {
+    const reports = await Report.find()
+      .sort({ createdAt: -1 })
+      .populate('matchId', 'title date time')
+      .populate('reporterHostId', 'name username email')
+      .populate('reportedUserId', 'name username email isBanned')
+      .limit(200);
+    return res.json(reports.map(reportToJson));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('❌ GET /api/admin/reports', error);
+    return res.status(500).json({ error: 'Không tải được danh sách report' });
+  }
+}
+
+async function getReportDetail(req, res) {
+  try {
+    const { id } = req.params;
+    assertValidObjectId(id, 'reportId');
+    const report = await Report.findById(id)
+      .populate('matchId', 'title date time')
+      .populate('reporterHostId', 'name username email')
+      .populate('reportedUserId', 'name username email isBanned');
+    if (!report) return res.status(404).json({ error: 'Không tìm thấy report' });
+    return res.json(reportToJson(report));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('❌ GET /api/admin/reports/:id', error);
+    const statusCode = error?.statusCode ?? 500;
+    return res.status(statusCode).json({ error: error?.message || 'Không tải được chi tiết report' });
+  }
+}
+
+async function sendWarningForReport(req, res) {
+  try {
+    const { id } = req.params;
+    assertValidObjectId(id, 'reportId');
+
+    const report = await Report.findById(id)
+      .populate('matchId', 'title date time')
+      .populate('reporterHostId', 'name username')
+      .populate('reportedUserId', 'name username email isBanned');
+    if (!report) return res.status(404).json({ error: 'Không tìm thấy report' });
+    if (!report.reportedUserId?.email) {
+      return res.status(400).json({ error: 'User bị report chưa có email để gửi cảnh báo' });
+    }
+
+    const warningLevel = 1;
+    const reportedName = report.reportedUserId?.name || report.reportedUserId?.username || 'Bạn';
+    const matchTitle = report.matchId?.title || 'không rõ';
+    const reasonText = report.reason || 'Không có';
+    const mailText =
+      `Xin chào ${reportedName},\n\n` +
+      `Đây là CẢNH BÁO LẦN ${warningLevel} từ quản trị viên SportMate.\n` +
+      `Hệ thống ghi nhận report liên quan đến hành vi của bạn trong trận "${matchTitle}".\n\n` +
+      `Lý do report:\n- ${reasonText}\n\n` +
+      `Vui lòng tuân thủ quy định cộng đồng và ứng xử văn minh khi tham gia hoạt động trên SportMate.\n` +
+      `Nếu tiếp tục vi phạm, tài khoản của bạn có thể bị hạn chế hoặc khóa vĩnh viễn.\n\n` +
+      `Trân trọng,\n` +
+      `Đội ngũ SportMate`;
+    const mailHtml =
+      `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#222">` +
+      `<p>Xin chào <strong>${reportedName}</strong>,</p>` +
+      `<p>Đây là <strong>CẢNH BÁO LẦN ${warningLevel}</strong> từ quản trị viên SportMate.</p>` +
+      `<p>Hệ thống ghi nhận report liên quan đến hành vi của bạn trong trận <strong>"${matchTitle}"</strong>.</p>` +
+      `<p><strong>Lý do report:</strong><br/>- ${reasonText}</p>` +
+      `<p>Vui lòng tuân thủ quy định cộng đồng và ứng xử văn minh khi tham gia hoạt động trên SportMate.</p>` +
+      `<p>Nếu tiếp tục vi phạm, tài khoản của bạn có thể bị hạn chế hoặc khóa vĩnh viễn.</p>` +
+      `<p>Trân trọng,<br/><strong>Đội ngũ SportMate</strong></p>` +
+      `</div>`;
+
+    await sendMail({
+      to: report.reportedUserId.email,
+      subject: `SportMate - Cảnh báo lần ${warningLevel}`,
+      text: mailText,
+      html: mailHtml,
+    });
+
+    report.warningSentAt = new Date();
+    report.warningNote = `Cảnh báo lần ${warningLevel} đã gửi tự động theo lý do report`;
+    if (report.status === 'pending') report.status = 'reviewed';
+    report.resolvedAction = report.resolvedAction || 'warned';
+    await report.save();
+
+    return res.json({
+      ok: true,
+      message: 'Gửi cảnh báo qua email thành công',
+      report: reportToJson(report),
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('❌ POST /api/admin/reports/:id/warn', error);
+    const statusCode = error?.statusCode ?? 500;
+    return res.status(statusCode).json({ error: error?.message || 'Không gửi được cảnh báo' });
+  }
+}
+
+async function banUserByReport(req, res) {
+  try {
+    const { id } = req.params;
+    assertValidObjectId(id, 'reportId');
+
+    const report = await Report.findById(id)
+      .populate('matchId', 'title date time')
+      .populate('reporterHostId', 'name username email')
+      .populate('reportedUserId', 'name username email isBanned');
+    if (!report) return res.status(404).json({ error: 'Không tìm thấy report' });
+    if (!report.reportedUserId?._id) {
+      return res.status(400).json({ error: 'User bị report không hợp lệ' });
+    }
+
+    const uid = new mongoose.Types.ObjectId(String(report.reportedUserId._id));
+    if (!report.reportedUserId.isBanned) {
+      await User.findByIdAndUpdate(uid, { isBanned: true, schedule: [] }, { new: true });
+      await applyBanConsequences(uid);
+    }
+
+    report.status = 'resolved';
+    report.resolvedAt = new Date();
+    report.resolvedAction = 'banned';
+    await report.save();
+
+    const refreshed = await Report.findById(id)
+      .populate('matchId', 'title date time')
+      .populate('reporterHostId', 'name username email')
+      .populate('reportedUserId', 'name username email isBanned');
+
+    return res.json(reportToJson(refreshed));
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('❌ POST /api/admin/reports/:id/ban', error);
+    const statusCode = error?.statusCode ?? 500;
+    return res.status(statusCode).json({ error: error?.message || 'Không ban được user từ report' });
   }
 }
 
@@ -557,6 +737,10 @@ module.exports = {
   updateVenue,
   approveVenue,
   rejectVenue,
+  listReports,
+  getReportDetail,
+  sendWarningForReport,
+  banUserByReport,
   patchAdminMatch,
 };
 

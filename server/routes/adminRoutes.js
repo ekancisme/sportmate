@@ -22,6 +22,11 @@ router.get('/courts', courtController.listAllCourtsAdmin);
 router.patch('/courts/:id/approve', courtController.approveCourt);
 router.patch('/courts/:id/reject', courtController.rejectCourt);
 
+router.get('/reports', adminController.listReports);
+router.get('/reports/:id', adminController.getReportDetail);
+router.post('/reports/:id/warn', adminController.sendWarningForReport);
+router.post('/reports/:id/ban', adminController.banUserByReport);
+
 router.patch('/matches/:id', adminController.patchAdminMatch);
 
 module.exports = router;

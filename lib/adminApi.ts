@@ -170,6 +170,40 @@ export type AdminMatchUpdatePayload = {
   cancelReason?: string;
 };
 
+export type AdminReportStatus = 'pending' | 'reviewed' | 'resolved';
+export type AdminReportResolvedAction = '' | 'warned' | 'banned';
+
+export type AdminReport = {
+  id: string;
+  reason: string;
+  status: AdminReportStatus;
+  warningSentAt?: string | null;
+  warningNote?: string;
+  resolvedAt?: string | null;
+  resolvedAction?: AdminReportResolvedAction;
+  createdAt?: string;
+  updatedAt?: string;
+  match?: {
+    id: string;
+    title: string;
+    date?: string;
+    time?: string;
+  } | null;
+  reporter?: {
+    id: string;
+    name: string;
+    username?: string;
+    email?: string;
+  } | null;
+  reportedUser?: {
+    id: string;
+    name: string;
+    username?: string;
+    email?: string;
+    isBanned?: boolean;
+  } | null;
+};
+
 export async function updateAdminMatch(
   matchId: string,
   adminId: string,
@@ -186,5 +220,40 @@ export async function updateAdminMatch(
     throw new Error(typeof data?.error === 'string' ? data.error : 'Không cập nhật trận được');
   }
   return data as ApiMatch;
+}
+
+export async function fetchAdminReports(): Promise<AdminReport[]> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/admin/reports`);
+  if (!res.ok) throw new Error('Không tải được danh sách report');
+  return getJson<AdminReport[]>(res);
+}
+
+export async function fetchAdminReportDetail(reportId: string): Promise<AdminReport> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/admin/reports/${encodeURIComponent(reportId)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Không tải được chi tiết report');
+  return data as AdminReport;
+}
+
+export async function sendAdminReportWarning(reportId: string): Promise<AdminReport> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/admin/reports/${encodeURIComponent(reportId)}/warn`, {
+    method: 'POST',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Gửi cảnh báo thất bại');
+  return (data?.report ?? data) as AdminReport;
+}
+
+export async function banUserByAdminReport(reportId: string): Promise<AdminReport> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/admin/reports/${encodeURIComponent(reportId)}/ban`, {
+    method: 'POST',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Ban user thất bại');
+  return data as AdminReport;
 }
 
