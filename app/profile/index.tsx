@@ -217,9 +217,13 @@ export default function PublicProfilePage() {
         <View style={styles.actionRow}>
           <Pressable
             style={({ pressed }) => [styles.msgBtn, pressed && styles.pressed]}
-            onPress={() =>
-              Alert.alert('Nhắn Tin', `Chức năng nhắn tin với ${user.name} sẽ sớm ra mắt!`)
-            }>
+            onPress={() => {
+              if (!currentUser?.id) {
+                Alert.alert('Chưa đăng nhập', 'Vui lòng đăng nhập để gửi tin nhắn.');
+                return;
+              }
+              router.push(`/chat/${id}` as any);
+            }}>
             <Ionicons name="chatbubble-ellipses-outline" size={17} color="#fff" />
             <Text style={styles.msgBtnText}>Nhắn Tin</Text>
           </Pressable>
