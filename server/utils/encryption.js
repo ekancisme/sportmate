@@ -9,9 +9,8 @@ const crypto = require("crypto");
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // bytes — recommended for GCM
-const KEY_HEX = process.env.CHAT_ENCRYPTION_KEY || "";
-
 function getKey() {
+  const KEY_HEX = (process.env.CHAT_ENCRYPTION_KEY || "").trim();
   if (!KEY_HEX || KEY_HEX.length !== 64) {
     throw new Error(
       "❌ CHAT_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). " +

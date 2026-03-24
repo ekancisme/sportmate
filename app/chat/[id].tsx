@@ -270,7 +270,12 @@ export default function ChatScreen() {
           value={inputText}
           onChangeText={setInputText}
           multiline
-          onSubmitEditing={sendMessage}
+          onKeyPress={(e: any) => {
+            if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+              e.preventDefault();
+              sendMessage();
+            }
+          }}
           blurOnSubmit={false}
         />
         <Pressable
