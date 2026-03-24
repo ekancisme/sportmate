@@ -19,8 +19,53 @@ function buildTimeLabel(timeStr) {
   return timeStr.split('-')[0].trim();
 }
 
+// ── Helper: tự động finish trận đã quá giờ ──────────────────────────────
+async function autoFinishExpiredMatches() {
+  try {
+    const now = new Date();
+
+    const activeMatches = await Match.find({ status: 'active' });
+    const toFinish = [];
+
+    for (const m of activeMatches) {
+      // Tách giờ kết thúc: lấy phần sau "-" hoặc +2h nếu chỉ có giờ bắt đầu
+      let endHour = 23, endMin = 59;
+      if (m.time) {
+        const parts = m.time.split('-');
+        if (parts.length >= 2) {
+          const [h, min] = parts[1].trim().split(':').map(Number);
+          endHour = h;
+          endMin = isNaN(min) ? 0 : min;
+        } else {
+          const [h, min] = parts[0].trim().split(':').map(Number);
+          endHour = h + 2;
+          endMin = isNaN(min) ? 0 : min;
+        }
+      }
+
+      const matchEnd = new Date(m.date);
+      matchEnd.setHours(endHour, endMin, 0, 0);
+
+      if (matchEnd < now) {
+        toFinish.push(m._id);
+      }
+    }
+
+    if (toFinish.length > 0) {
+      await Match.updateMany(
+        { _id: { $in: toFinish } },
+        { $set: { status: 'finished' } },
+      );
+      console.log(`⏰ Auto-finished ${toFinish.length} expired matches`);
+    }
+  } catch (err) {
+    console.warn('⚠️ autoFinishExpiredMatches error:', err.message);
+  }
+}
+
 async function listMatches(_req, res) {
   try {
+    await autoFinishExpiredMatches();
     const matches = await Match.find()
       .sort({ createdAt: -1 })
       .limit(100)
@@ -35,6 +80,7 @@ async function listMatches(_req, res) {
 
 async function listMine(req, res) {
   try {
+    await autoFinishExpiredMatches();
     const userId = req.query.userId || req.query.hostId;
     if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
       return res.status(400).json({ error: 'Thiếu hoặc sai userId (hoặc hostId)' });
@@ -59,6 +105,7 @@ async function listMine(req, res) {
 
 async function getMatch(req, res) {
   try {
+    await autoFinishExpiredMatches();
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: 'ID không hợp lệ' });
