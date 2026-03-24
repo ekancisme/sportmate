@@ -9,5 +9,6 @@ router.post('/:id/avatar', upload.single('avatar'), userController.uploadAvatar)
 router.get('/ranking', userController.getRanking);
 router.get('/:id', userController.getUser);
 router.put('/:id', userController.updateUser);
+router.post('/:id/favorite', userController.toggleFavorite);
 
 module.exports = router;
