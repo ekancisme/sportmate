@@ -9,8 +9,13 @@ export type ApiUser = {
   bio?: string;
   winRate: number;
   matchesPlayed: number;
+  matchesWon?: number;
+  hoursActive?: number;
+  followers?: number;
   sport?: string;
   level?: string;
+  sports?: { name: string; level: string }[];
+  schedule?: { day: string; time?: string; activity: string; matchId?: string }[];
 };
 
 /** Chuẩn hóa avatar từ API (path tương đối → URL đầy đủ cho Image) */
@@ -51,5 +56,11 @@ export async function fetchUserById(id: string): Promise<ApiUser> {
   return {
     ...data,
     avatar: resolveAvatarUrl(data.avatar),
+    // flatten stats sub-object to root for convenience
+    winRate:        data.stats?.winRate        ?? data.winRate        ?? 0,
+    matchesPlayed:  data.stats?.matchesPlayed  ?? data.matchesPlayed  ?? 0,
+    matchesWon:     data.stats?.matchesWon     ?? data.matchesWon     ?? 0,
+    hoursActive:    data.stats?.hoursActive    ?? data.hoursActive    ?? 0,
+    followers:      data.stats?.followers      ?? data.followers      ?? 0,
   };
 }
