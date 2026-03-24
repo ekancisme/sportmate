@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -74,13 +75,25 @@ export default function HomeScreen() {
   const [matches, setMatches] = useState<ApiMatch[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(true);
   const [matchesError, setMatchesError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const upcomingMatches = useMemo(
     () =>
-      matches.filter(
-        (m) => m.status !== "finished" && m.status !== "cancelled",
-      ),
-    [matches],
+      matches.filter((m) => {
+        if (m.status === "finished" || m.status === "cancelled") return false;
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase();
+          const titleMatch = m.title?.toLowerCase().includes(query);
+          const locationMatch = m.location?.toLowerCase().includes(query);
+          const sportMatch = m.sport?.toLowerCase().includes(query);
+          const hostMatch =
+            m.host?.name?.toLowerCase().includes(query) ||
+            m.host?.username?.toLowerCase().includes(query);
+          return titleMatch || locationMatch || sportMatch || hostMatch;
+        }
+        return true;
+      }),
+    [matches, searchQuery],
   );
 
   const thisWeekMatchesCount = useMemo(() => {
@@ -324,11 +337,22 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Trận đấu sắp diễn ra</Text>
-          {!matchesLoading && upcomingMatches.length > 0 && (
+          {!matchesLoading && matches.filter((m) => m.status !== "finished" && m.status !== "cancelled").length > 0 && (
             <Pressable onPress={() => router.push("/match")}>
               <Text style={styles.seeAllText}>Xem tất cả</Text>
             </Pressable>
           )}
+        </View>
+
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm trận đấu, địa điểm, môn thể thao..."
+            placeholderTextColor="#888888"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
 
         {matchesLoading ? (
@@ -343,7 +367,7 @@ export default function HomeScreen() {
               <Text style={styles.matchesRetryText}>Thử lại</Text>
             </Pressable>
           </View>
-        ) : upcomingMatches.length === 0 ? (
+        ) : matches.filter((m) => m.status !== "finished" && m.status !== "cancelled").length === 0 ? (
           <View style={styles.matchesEmptyCard}>
             <Text style={styles.matchesEmptyIcon}>🏟️</Text>
             <Text style={styles.matchesEmptyTitle}>Chưa có trận nào</Text>
@@ -356,6 +380,14 @@ export default function HomeScreen() {
             >
               <Text style={styles.matchesEmptyBtnText}>+ Tạo trận</Text>
             </Pressable>
+          </View>
+        ) : upcomingMatches.length === 0 ? (
+          <View style={styles.matchesEmptyCard}>
+            <Text style={styles.matchesEmptyIcon}>🔍</Text>
+            <Text style={styles.matchesEmptyTitle}>Không tìm thấy kết quả</Text>
+            <Text style={styles.matchesEmptySubtitle}>
+              Thử tìm với từ khóa khác
+            </Text>
           </View>
         ) : (
           <View style={styles.matchesList}>
@@ -1046,6 +1078,27 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 14,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#333333",
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#ffffff",
+    fontSize: 14,
+    padding: 0,
   },
   seeAllText: {
     color: "#ff4d4f",

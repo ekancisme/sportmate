@@ -10,8 +10,19 @@ const matchRoutes = require("./routes/matchRoutes");
 const partnerRoutes = require("./routes/partnerRoutes");
 const courtRoutes = require("./routes/courtRoutes");
 const venueRoutes = require("./routes/venueRoutes");
+const messageRoutes = require("./routes/messageRoutes");
+const http = require("http");
+const { Server } = require("socket.io");
+const Message = require("./models/Message");
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
 const PORT = process.env.PORT || 3000;
 
 const MONGODB_URI = (process.env.MONGODB_URI || "").trim();
@@ -46,6 +57,44 @@ app.use("/api/partners", partnerRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/matches", matchRoutes);
 app.use("/api/venues", venueRoutes);
+app.use("/api/messages", messageRoutes);
+
+// Socket.IO logic
+io.on("connection", (socket) => {
+  console.log(`User connected to socket: ${socket.id}`);
+
+  // User joins their own personal room
+  socket.on("join_room", (userId) => {
+    socket.join(userId);
+    console.log(`User with ID ${userId} joined their room`);
+  });
+
+  // Handle sending a message
+  socket.on("send_message", async (data) => {
+    try {
+      const { senderId, receiverId, text } = data;
+
+      // Save encrypted message to DB (pre-save hook in Message model does the encryption)
+      const newMessage = new Message({ senderId, receiverId, text });
+      await newMessage.save();
+
+      // Serialize to plain object with decrypted text + string IDs for client
+      const { serializeMessage } = require("./controllers/messageController");
+      const msgPayload = serializeMessage(newMessage);
+
+      // Emit to both rooms (receiver sees it in real-time; sender gets confirmation)
+      io.to(receiverId).emit("receive_message", msgPayload);
+      io.to(senderId).emit("receive_message", msgPayload);
+
+    } catch (err) {
+      console.error("Socket send_message error:", err);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`User disconnected: ${socket.id}`);
+  });
+});
 
 async function start() {
   try {
@@ -56,8 +105,9 @@ async function start() {
     process.exit(1);
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server: http://0.0.0.0:${PORT}`);
+    console.log(`💬 Socket.IO is ready for connections`);
   });
 }
 
