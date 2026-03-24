@@ -72,8 +72,42 @@ async function updateUser(req, res) {
   }
 }
 
+async function getRanking(req, res) {
+  try {
+    const users = await User.find({ isBanned: { $ne: true } })
+      .select('name avatar location sports stats')
+      .lean();
+
+    // Sort: matchesWon desc → winRate desc → matchesPlayed desc
+    const sorted = users
+      .map((u) => ({
+        id: u._id.toString(),
+        name: u.name || 'Ẩn danh',
+        avatar: u.avatar || null,
+        location: u.location || '',
+        sport: u.sports?.[0]?.name || null,
+        level: u.sports?.[0]?.level || null,
+        matchesWon:    u.stats?.matchesWon    ?? 0,
+        matchesPlayed: u.stats?.matchesPlayed ?? 0,
+        winRate:       u.stats?.winRate       ?? 0,
+        hoursActive:   u.stats?.hoursActive   ?? 0,
+      }))
+      .sort((a, b) => {
+        if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
+        if (b.winRate    !== a.winRate)    return b.winRate    - a.winRate;
+        return b.matchesPlayed - a.matchesPlayed;
+      });
+
+    return res.json(sorted);
+  } catch (error) {
+    console.error('Ranking error:', error);
+    return res.status(500).json({ error: 'Lấy bảng xếp hạng thất bại' });
+  }
+}
+
 module.exports = {
   uploadAvatar,
   getUser,
   updateUser,
+  getRanking,
 };
