@@ -44,8 +44,7 @@ function getApiBaseUrl() {
 
   const hostUri =
     Constants.expoConfig?.hostUri ||
-    // @ts-expect-error support older expo manifest
-    Constants.manifest?.hostUri;
+    (Constants as { manifest?: { hostUri?: string } }).manifest?.hostUri;
 
   if (hostUri) {
     const host = hostUri.split(':')[0];
