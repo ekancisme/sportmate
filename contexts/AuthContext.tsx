@@ -43,6 +43,8 @@ export type SuggestedPartner = {
   age?: number;
   location?: string;
   avatar?: string;
+  /** Location có rõ ràng không (tên thành phố/quận vs địa chỉ cụ thể) */
+  isLocationClear?: boolean;
 };
 
 type AuthContextValue = {

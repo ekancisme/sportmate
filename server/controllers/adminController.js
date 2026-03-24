@@ -109,8 +109,45 @@ async function updateUserBan(req, res) {
       return res.status(400).json({ error: 'isBanned phải là boolean' });
     }
 
-    const user = await User.findByIdAndUpdate(id, { isBanned }, { new: true });
+    const uid = new mongoose.Types.ObjectId(String(id));
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      {
+        isBanned,
+        ...(isBanned ? { schedule: [] } : {}),
+      },
+      { new: true },
+    );
     if (!user) return res.status(404).json({ error: 'Không tìm thấy user' });
+
+    if (isBanned) {
+      // Gỡ user bị ban khỏi tất cả trận đã tham gia.
+      const joinedMatches = await Match.find({ participantIds: uid }).select(
+        '_id participantIds winners currentPlayers',
+      );
+      for (const m of joinedMatches) {
+        const nextParticipants = (m.participantIds || []).filter((p) => !p.equals(uid));
+        const nextWinners = (m.winners || []).filter((w) => !w.equals(uid));
+        m.participantIds = nextParticipants;
+        m.winners = nextWinners;
+        m.currentPlayers = nextParticipants.length;
+        await m.save();
+      }
+
+      // Nếu là host của trận đang mở, hủy trận để tránh user bị ban vẫn đứng host.
+      await Match.updateMany(
+        { hostId: uid, status: 'active' },
+        {
+          $set: {
+            status: 'cancelled',
+            winners: [],
+            cancelReason: 'Trận bị hủy do tài khoản host đã bị khóa bởi quản trị viên',
+          },
+        },
+      );
+    }
+
     return res.json(user.toJSON());
   } catch (error) {
     // eslint-disable-next-line no-console
