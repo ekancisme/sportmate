@@ -39,6 +39,13 @@ const userSchema = new mongoose.Schema(
         },
       },
     ],
+    /** Mảng ID của các user đã ấn "Yêu thích" người này */
+    favorites: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true },
 );

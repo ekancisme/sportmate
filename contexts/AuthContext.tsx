@@ -29,6 +29,7 @@ export type AuthUser = {
     activity: string;
     matchId?: string;
   }[];
+  favorites?: string[];
 };
 
 export type SuggestedPartner = {
