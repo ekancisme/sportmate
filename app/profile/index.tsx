@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fetchUserById, type ApiUser } from '@/lib/userApi';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchUserById, toggleFavorite, type ApiUser } from '@/lib/userApi';
 
 // ─── Design tokens (đồng bộ màu chủ đạo app) ────────────────────────────────
 const PRIMARY  = '#ff4d4f';
@@ -41,11 +42,14 @@ export default function PublicProfilePage() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
+  const { user: currentUser } = useAuth();   // người dùng đang đăng nhập
 
   const [user, setUser]           = useState<ApiUser | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
   const [favorited, setFavorited] = useState(false);
+  const [favCount, setFavCount]   = useState(0);
+  const [favBusy, setFavBusy]     = useState(false);  // đang gọi API
 
   useEffect(() => {
     if (!id) {
@@ -58,8 +62,12 @@ export default function PublicProfilePage() {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchUserById(id);
-        if (!cancelled) setUser(data);
+        const data = await fetchUserById(id, { viewerId: currentUser?.id });
+        if (!cancelled) {
+          setUser(data);
+          setFavorited(data.isFavoritedByMe ?? false);
+          setFavCount(data.favoritesCount ?? 0);
+        }
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : 'Không tải được thông tin');
@@ -68,7 +76,35 @@ export default function PublicProfilePage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, currentUser?.id]);
+
+  // ── Toggle yêu thích ──
+  const handleFavorite = async () => {
+    if (!currentUser?.id) {
+      Alert.alert('Chưa đăng nhập', 'Vui lòng đăng nhập để yêu thích người chơi này.');
+      return;
+    }
+    if (!id) return;
+    if (favBusy) return;
+    setFavBusy(true);
+    // Optimistic update
+    const prev = favorited;
+    const prevCount = favCount;
+    setFavorited(!favorited);
+    setFavCount((c) => (favorited ? Math.max(0, c - 1) : c + 1));
+    try {
+      const result = await toggleFavorite(id, currentUser.id);
+      setFavorited(result.favorited);
+      setFavCount(result.favoritesCount);
+    } catch {
+      // rollback nếu lỗi
+      setFavorited(prev);
+      setFavCount(prevCount);
+      Alert.alert('Lỗi', 'Không thể thực hiện thao tác yêu thích.');
+    } finally {
+      setFavBusy(false);
+    }
+  };
 
   // ── TopBar ──
   function TopBar({ showFav = false }: { showFav?: boolean }) {
@@ -83,7 +119,8 @@ export default function PublicProfilePage() {
         {showFav ? (
           <Pressable
             style={({ pressed }) => [styles.navBtn, pressed && styles.pressed]}
-            onPress={() => setFavorited((v) => !v)}>
+            onPress={handleFavorite}
+            disabled={favBusy}>
             <Ionicons
               name={favorited ? 'heart' : 'heart-outline'}
               size={21}
@@ -192,16 +229,23 @@ export default function PublicProfilePage() {
               styles.favBtn,
               favorited && styles.favBtnActive,
               pressed && styles.pressed,
+              favBusy && { opacity: 0.6 },
             ]}
-            onPress={() => setFavorited((v) => !v)}>
+            onPress={handleFavorite}
+            disabled={favBusy}>
             <Ionicons
               name={favorited ? 'heart' : 'heart-outline'}
               size={17}
               color={favorited ? '#fff' : PRIMARY}
             />
             <Text style={[styles.favBtnText, favorited && styles.favBtnTextActive]}>
-              {favorited ? 'Đã Yêu Thích' : 'Yêu Thích'}
+              {favorited ? `Đã Yêu Thích` : 'Yêu Thích'}
             </Text>
+            {favCount > 0 && (
+              <View style={styles.favCountBadge}>
+                <Text style={styles.favCountText}>{favCount}</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </View>
@@ -223,7 +267,7 @@ export default function PublicProfilePage() {
           <StatBox icon="trophy-outline"       label="Trận Đã Chơi" value={String(user.matchesPlayed ?? 0)} />
           <StatBox icon="flash-outline"         label="Tỷ Lệ Thắng"  value={`${user.winRate ?? 0}%`} />
           <StatBox icon="time-outline"          label="Giờ Hoạt Động" value={String(user.hoursActive ?? 0)} />
-          <StatBox icon="people-circle-outline" label="Người Theo Dõi" value={String(user.followers ?? 0)} />
+          <StatBox icon="heart-outline" label="Yêu Thích" value={String(favCount)} />
         </View>
 
         {/* ── Môn thể thao ── (luôn hiện) */}
@@ -577,4 +621,17 @@ const styles = StyleSheet.create({
     borderColor: PRIMARY,
   },
   retryBtnText: { color: PRIMARY, fontSize: 14, fontWeight: '600' },
+  
+  // fav count
+  favCountBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  favCountText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
 });

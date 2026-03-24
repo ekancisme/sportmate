@@ -14,7 +14,14 @@ import {
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
-import { deleteCourt, fetchMyCourts, formatCourtPrice, resolveCourtImageUrl, type ApiCourt } from '@/lib/courtApi';
+import {
+  deleteCourt,
+  fetchMyCourts,
+  formatCourtPrice,
+  resolveCourtImageUrl,
+  resubmitCourtOwner,
+  type ApiCourt,
+} from '@/lib/courtApi';
 
 const PRIMARY = '#ff4d4f';
 
@@ -29,7 +36,7 @@ export default function MyCourtsScreen() {
 
   const noticeText = useMemo(() => {
     const raw = Array.isArray(params.notice) ? params.notice[0] : params.notice;
-    if (raw === 'created') return 'Đăng sân thành công. Sân của bạn đã sẵn sàng cho việc đặt lịch.';
+    if (raw === 'created') return 'Đăng sân thành công! Sân đang chờ admin duyệt trước khi hiển thị công khai.';
     if (raw === 'updated') return 'Cập nhật sân thành công.';
     return '';
   }, [params.notice]);
@@ -83,6 +90,22 @@ export default function MyCourtsScreen() {
         })();
       },
     });
+  };
+
+  const handleResubmit = async (court: ApiCourt) => {
+    if (!user?.id) return;
+
+    setBusyId(court.id);
+    try {
+      await resubmitCourtOwner(court.id, user.id);
+      show('Thành công', 'Đã chuyển sân sang trạng thái chờ duyệt.', { variant: 'info' });
+      // Reload danh sách sân
+      void loadCourts();
+    } catch (error) {
+      show('Lỗi', error instanceof Error ? error.message : 'Không gửi lại được', { variant: 'error' });
+    } finally {
+      setBusyId(null);
+    }
   };
 
   if (role !== 'owner') {
@@ -160,6 +183,24 @@ export default function MyCourtsScreen() {
                     <Text style={styles.cardSport}>{court.sportLabel}</Text>
                     <Text style={styles.cardMeta}>{court.address}</Text>
                     <Text style={styles.cardPrice}>{formatCourtPrice(court.pricePerHour)}</Text>
+
+                    {/* Badge trạng thái duyệt */}
+                    {court.approvalStatus === 'pending' || !court.approvalStatus ? (
+                      <View style={styles.pendingBadge}>
+                        <Text style={styles.pendingBadgeText}> Chờ admin duyệt</Text>
+                      </View>
+                    ) : court.approvalStatus === 'rejected' ? (
+                      <View style={styles.rejectedBadge}>
+                        <Text style={styles.rejectedBadgeText}>
+                          Bị từ chối
+                          {court.rejectReason ? `: ${court.rejectReason}` : ''}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.approvedBadge}>
+                        <Text style={styles.approvedBadgeText}> Đã duyệt</Text>
+                      </View>
+                    )}
                   </View>
                 </Pressable>
 
@@ -170,14 +211,31 @@ export default function MyCourtsScreen() {
                       router.push({ pathname: '/courts/create' as never, params: { editId: court.id } })
                     }
                     disabled={isBusy}>
-                    <Text style={styles.secondaryActionText}>Sửa</Text>
+                    <Text style={styles.secondaryActionText}>
+                      {court.approvalStatus === 'rejected' ? 'Chỉnh sửa' : 'Sửa'}
+                    </Text>
                   </Pressable>
-                  <Pressable
-                    style={styles.primaryAction}
-                    onPress={() => router.push(`/courts/bookings?courtId=${court.id}` as never)}
-                    disabled={isBusy}>
-                    <Text style={styles.primaryActionText}>Lịch đặt</Text>
-                  </Pressable>
+
+                  {/* Sân đã duyệt -> render Lịch đặt */}
+                  {court.approvalStatus === 'active' ? (
+                    <Pressable
+                      style={styles.primaryAction}
+                      onPress={() => router.push(`/courts/bookings?courtId=${court.id}` as never)}
+                      disabled={isBusy}>
+                      <Text style={styles.primaryActionText}>Lịch đặt</Text>
+                    </Pressable>
+                  ) : null}
+
+                  {/* Sân bị từ chối -> render Đăng lại */}
+                  {court.approvalStatus === 'rejected' ? (
+                    <Pressable
+                      style={styles.primaryAction}
+                      onPress={() => handleResubmit(court)}
+                      disabled={isBusy}>
+                      <Text style={styles.primaryActionText}>{isBusy ? '...' : 'Đăng lại'}</Text>
+                    </Pressable>
+                  ) : null}
+
                   <Pressable
                     style={styles.deleteAction}
                     onPress={() => handleDelete(court)}
@@ -400,6 +458,51 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: {
     color: PRIMARY,
+    fontWeight: '600',
+  },
+  pendingBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(245, 166, 35, 0.15)',
+    borderWidth: 1,
+    borderColor: '#f5a623',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  pendingBadgeText: {
+    color: '#f5a623',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  rejectedBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 77, 79, 0.12)',
+    borderWidth: 1,
+    borderColor: '#ff4d4f',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  rejectedBadgeText: {
+    color: '#ff8888',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  approvedBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    borderWidth: 1,
+    borderColor: '#4caf50',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  approvedBadgeText: {
+    color: '#81c784',
+    fontSize: 11,
     fontWeight: '600',
   },
 });

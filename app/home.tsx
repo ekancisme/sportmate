@@ -76,9 +76,25 @@ export default function HomeScreen() {
   const [matchesError, setMatchesError] = useState<string | null>(null);
 
   const upcomingMatches = useMemo(
-    () => matches.filter((m) => m.status !== "finished" && m.status !== "cancelled"),
+    () =>
+      matches.filter(
+        (m) => m.status !== "finished" && m.status !== "cancelled",
+      ),
     [matches],
   );
+
+  const thisWeekMatchesCount = useMemo(() => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+    return matches.filter((m) => {
+      const d = new Date(m.date);
+      return d >= startOfWeek && d < endOfWeek;
+    }).length;
+  }, [matches]);
 
   const partnerPages = useMemo(
     () => chunkPlayers(partners, PARTNERS_PER_PAGE),
@@ -187,6 +203,17 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>Trận tuần này</Text>
+          <Text style={styles.statValue}>{thisWeekMatchesCount}</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>Đồng đội quanh bạn</Text>
+          <Text style={styles.statValue}>{partners.length}</Text>
+        </View>
+      </View>
+
       <View style={styles.section}>
         <View style={styles.partnerSectionHeader}>
           <Text style={styles.sectionTitle}>Những partner tuyệt vời</Text>
@@ -256,7 +283,10 @@ export default function HomeScreen() {
                       </Text>
                       <View style={styles.partnerChipsRow}>
                         <View style={styles.partnerChipLocation}>
-                          <Text style={styles.partnerChipText} numberOfLines={1}>
+                          <Text
+                            style={styles.partnerChipText}
+                            numberOfLines={1}
+                          >
                             {p.location || "Không rõ vị trí"}
                           </Text>
                         </View>

@@ -15,6 +15,7 @@ router.post('/', courtController.createCourt);
 router.post('/:id/bookings', courtBookingController.createBooking);
 router.post('/:id/images', courtUpload.array('images', 8), courtController.uploadCourtImages);
 router.patch('/:id', courtController.patchCourt);
+router.patch('/:id/resubmit', courtController.resubmitCourt);
 router.delete('/:id', courtController.deleteCourt);
 
 module.exports = router;
