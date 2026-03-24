@@ -21,12 +21,20 @@ const courtSchema = new mongoose.Schema(
     openTime: { type: String, default: '06:00' },
     closeTime: { type: String, default: '22:00' },
     slotMinutes: { type: Number, default: 60, min: 30 },
+    // Trạng thái duyệt: pending = chờ admin duyệt, active = đã duyệt, rejected = bị từ chối
+    approvalStatus: {
+      type: String,
+      enum: ['pending', 'active', 'rejected'],
+      default: 'pending',
+    },
+    rejectReason: { type: String, default: '' },
   },
   { timestamps: true },
 );
 
 courtSchema.index({ ownerId: 1, createdAt: -1 });
 courtSchema.index({ sportKey: 1, visibilityStatus: 1 });
+courtSchema.index({ approvalStatus: 1, createdAt: -1 });
 
 courtSchema.set('toJSON', {
   transform: (_document, returnedObject) => {

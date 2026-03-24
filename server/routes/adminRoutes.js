@@ -1,6 +1,7 @@
 const express = require('express');
 
 const adminController = require('../controllers/adminController');
+const courtController = require('../controllers/courtController');
 
 const router = express.Router();
 
@@ -16,7 +17,13 @@ router.patch('/venues/:id', adminController.updateVenue);
 router.patch('/venues/:id/approve', adminController.approveVenue);
 router.patch('/venues/:id/reject', adminController.rejectVenue);
 
+// ─── Court approval routes ────────────────────────────────────────────────
+router.get('/courts', courtController.listAllCourtsAdmin);
+router.patch('/courts/:id/approve', courtController.approveCourt);
+router.patch('/courts/:id/reject', courtController.rejectCourt);
+
 router.patch('/matches/:id', adminController.patchAdminMatch);
 
 module.exports = router;
+
 

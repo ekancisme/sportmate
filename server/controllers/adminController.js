@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+const Court = require('../models/Court');
 const User = require('../models/User');
 const Match = require('../models/Match');
 const Venue = require('../models/Venue');
@@ -15,15 +16,27 @@ function assertValidObjectId(id, name = 'id') {
 
 async function getStats(_req, res) {
   try {
-    const [usersCount, matchesCount, venuesPending, venuesActive, venuesRejected, venuesApproved] =
-      await Promise.all([
-        User.countDocuments(),
-        Match.countDocuments(),
-        Venue.countDocuments({ status: 'pending' }),
-        Venue.countDocuments({ status: 'active' }),
-        Venue.countDocuments({ status: 'rejected' }),
-        Venue.countDocuments({ status: 'approved' }),
-      ]);
+    const [
+      usersCount,
+      matchesCount,
+      venuesPending,
+      venuesActive,
+      venuesRejected,
+      venuesApproved,
+      courtsPending,
+      courtsActive,
+      courtsRejected,
+    ] = await Promise.all([
+      User.countDocuments(),
+      Match.countDocuments(),
+      Venue.countDocuments({ status: 'pending' }),
+      Venue.countDocuments({ status: 'active' }),
+      Venue.countDocuments({ status: 'rejected' }),
+      Venue.countDocuments({ status: 'approved' }),
+      Court.countDocuments({ approvalStatus: 'pending' }),
+      Court.countDocuments({ approvalStatus: 'active' }),
+      Court.countDocuments({ approvalStatus: 'rejected' }),
+    ]);
 
     return res.json({
       usersCount,
@@ -32,6 +45,11 @@ async function getStats(_req, res) {
         pending: venuesPending,
         active: venuesActive + venuesApproved,
         rejected: venuesRejected,
+      },
+      courts: {
+        pending: courtsPending,
+        active: courtsActive,
+        rejected: courtsRejected,
       },
     });
   } catch (error) {

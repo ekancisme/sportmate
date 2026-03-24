@@ -9,6 +9,11 @@ export type AdminStats = {
     active: number;
     rejected: number;
   };
+  courts: {
+    pending: number;
+    active: number;
+    rejected: number;
+  };
 };
 
 export type AdminUser = {

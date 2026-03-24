@@ -78,8 +78,12 @@ async function resolveOwnerUser(ownerId) {
 }
 
 function buildPublicCourtFilter(req) {
+  // Chỉ hiển thị sân đã được admin duyệt (approvalStatus = 'active')
   const filter = {
-    $and: [{ $or: [{ visibilityStatus: 'active' }, { visibilityStatus: { $exists: false } }] }],
+    $and: [
+      { approvalStatus: 'active' },
+      { $or: [{ visibilityStatus: 'active' }, { visibilityStatus: { $exists: false } }] },
+    ],
   };
   const q = String(req.query.q || '').trim();
   const sportKey = normalizeSportKey(req.query.sportKey || req.query.sport || '');
@@ -93,7 +97,7 @@ function buildPublicCourtFilter(req) {
     filter.$and.push({ $or: [{ name: pattern }, { address: pattern }, { sport: pattern }] });
   }
 
-  return filter.$and.length === 1 ? filter.$and[0] : filter;
+  return filter;
 }
 
 async function listCourts(req, res) {
@@ -220,6 +224,9 @@ async function createCourt(req, res) {
       openTime: normalizedHours.openTime,
       closeTime: normalizedHours.closeTime,
       slotMinutes: normalizedHours.slotMinutes,
+      // Sân mới luôn ở trạng thái chờ duyệt
+      approvalStatus: 'pending',
+      rejectReason: '',
     });
 
     await court.populate('ownerId', 'name username avatar phone role');
@@ -426,12 +433,136 @@ async function deleteCourt(req, res) {
   }
 }
 
+// ─── Admin-only functions ────────────────────────────────────────────────
+
+/**
+ * Lấy toàn bộ sân (tất cả approvalStatus) dành cho admin.
+ * Sân pending được đẩy lên đầu.
+ */
+async function listAllCourtsAdmin(_req, res) {
+  try {
+    const courts = await Court.find({})
+      .sort({ approvalStatus: 1, createdAt: -1 })
+      .limit(300)
+      .populate('ownerId', 'name username avatar phone role');
+
+    return res.json(courts.map((court) => courtJsonWithOwner(court)));
+  } catch (error) {
+    console.error('❌ GET /api/admin/courts', error);
+    return res.status(500).json({ error: 'Không lấy được danh sách sân' });
+  }
+}
+
+/**
+ * Admin duyệt sân: chuyển approvalStatus thành 'active'.
+ */
+async function approveCourt(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID sân không hợp lệ' });
+    }
+
+    const court = await Court.findByIdAndUpdate(
+      id,
+      { approvalStatus: 'active', rejectReason: '' },
+      { new: true },
+    ).populate('ownerId', 'name username avatar phone role');
+
+    if (!court) return res.status(404).json({ error: 'Không tìm thấy sân' });
+    return res.json(courtJsonWithOwner(court));
+  } catch (error) {
+    console.error('❌ PATCH /api/admin/courts/:id/approve', error);
+    return res.status(500).json({ error: 'Duyệt sân thất bại' });
+  }
+}
+
+/**
+ * Admin từ chối sân: chuyển approvalStatus thành 'rejected' kèm lý do.
+ */
+async function rejectCourt(req, res) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID sân không hợp lệ' });
+    }
+
+    const reasonTrim = String(reason || '').trim();
+    if (!reasonTrim || reasonTrim.length < 3) {
+      return res.status(400).json({ error: 'Vui lòng nhập lý do từ chối (ít nhất 3 ký tự)' });
+    }
+
+    const court = await Court.findByIdAndUpdate(
+      id,
+      { approvalStatus: 'rejected', rejectReason: reasonTrim },
+      { new: true },
+    ).populate('ownerId', 'name username avatar phone role');
+
+    if (!court) return res.status(404).json({ error: 'Không tìm thấy sân' });
+    return res.json(courtJsonWithOwner(court));
+  } catch (error) {
+    console.error('❌ PATCH /api/admin/courts/:id/reject', error);
+    return res.status(500).json({ error: 'Từ chối sân thất bại' });
+  }
+}
+
+/**
+ * Owner đăng lại sân bị từ chối: reset approvalStatus về 'pending'.
+ * Chỉ được gọi khi sân đang ở trạng thái 'rejected'.
+ */
+async function resubmitCourt(req, res) {
+  try {
+    const { id } = req.params;
+    const { ownerId } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID sân không hợp lệ' });
+    }
+
+    const ownerResult = await resolveOwnerUser(ownerId);
+    if (!ownerResult.user) {
+      return res.status(ownerResult.status).json({ error: ownerResult.error });
+    }
+
+    const doc = await Court.findById(id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Không tìm thấy sân' });
+    }
+
+    const callerId = String(ownerResult.user._id);
+    const isAdmin = ownerResult.user.role === 'admin';
+    if (!isAdmin && !doc.ownerId.equals(new mongoose.Types.ObjectId(callerId))) {
+      return res.status(403).json({ error: 'Bạn không có quyền đăng lại sân này' });
+    }
+
+    if (doc.approvalStatus !== 'rejected') {
+      return res.status(400).json({ error: 'Chỉ có thể đăng lại sân đang bị từ chối' });
+    }
+
+    const court = await Court.findByIdAndUpdate(
+      id,
+      { approvalStatus: 'pending', rejectReason: '' },
+      { new: true },
+    ).populate('ownerId', 'name username avatar phone role');
+
+    return res.json(courtJsonWithOwner(court));
+  } catch (error) {
+    console.error('❌ PATCH /api/courts/:id/resubmit', error);
+    return res.status(500).json({ error: 'Không đăng lại được sân' });
+  }
+}
+
 module.exports = {
   createCourt,
   deleteCourt,
   getCourt,
   listCourts,
   listMine,
+  listAllCourtsAdmin,
+  approveCourt,
+  rejectCourt,
+  resubmitCourt,
   patchCourt,
   resolveOwnerUser,
   uploadCourtImages,
