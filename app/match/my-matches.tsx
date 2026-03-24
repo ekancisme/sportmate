@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppAlert } from '@/hooks/useAppAlert';
 import {
+    autoFinishExpiredHostedMatches,
     deleteMatch,
     fetchMyMatches,
     formatDateVi,
@@ -40,6 +41,8 @@ export default function MyMatchesScreen({ embeddedInTab = false }: MyMatchesScre
     setLoading(true);
     setErr(null);
     try {
+      // Auto-finish các trận host đã quá thời gian trước khi tải danh sách.
+      await autoFinishExpiredHostedMatches(user.id).catch(() => 0);
       const rows = await fetchMyMatches(user.id);
       setList(rows);
     } catch (e) {

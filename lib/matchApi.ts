@@ -216,6 +216,20 @@ export async function fetchMyMatches(userId: string): Promise<ApiMatch[]> {
   return res.json();
 }
 
+export async function autoFinishExpiredHostedMatches(hostId: string): Promise<number> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/matches/auto-finish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hostId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(typeof data.error === 'string' ? data.error : 'Không thể tự động kết thúc trận');
+  }
+  return Number(data.updated ?? 0);
+}
+
 export type UpdateMatchPayload = {
   sport?: string;
   title?: string;
@@ -341,6 +355,27 @@ export async function leaveMatch(matchId: string, userId: string): Promise<ApiMa
     throw new Error(typeof data.error === 'string' ? data.error : 'Không rời trận được');
   }
   return data as ApiMatch;
+}
+
+export async function reportParticipant(
+  matchId: string,
+  hostId: string,
+  participantId: string,
+  reason: string,
+): Promise<void> {
+  const base = getApiBaseUrl();
+  const res = await fetch(
+    `${base}/api/matches/${encodeURIComponent(matchId)}/report-participant`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostId, participantId, reason }),
+    },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(typeof data.error === 'string' ? data.error : 'Không gửi được report');
+  }
 }
 
 /** Dòng phụ trên card home: giờ + ngày */
