@@ -185,13 +185,7 @@ export default function MyProfile() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      {/* ── Header ── */}
-      <View style={styles.pageHeader}>
-        <View>
-          <Text style={styles.pageTitle}>Hồ Sơ Của Tôi</Text>
-          <Text style={styles.pageSubtitle}>Quản lý thông tin cá nhân</Text>
-        </View>
-      </View>
+          
 
       {/* ── Profile Card ── */}
       <View style={styles.profileCard}>
@@ -539,6 +533,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingVertical: 24,
     paddingHorizontal: 16,
+    marginTop: 14,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: BORDER,
