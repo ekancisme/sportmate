@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +13,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -46,8 +46,15 @@ function getApiBaseUrl(): string {
   if (envUrl) return envUrl;
   const hostUri =
     Constants.expoConfig?.hostUri ||
-    // @ts-ignore old expo
-    Constants.manifest?.hostUri;
+    (Constants as { manifest?: { hostUri?: string } }).manifest?.hostUri;
+
+  if (hostUri) {
+    const host = hostUri.split(':')[0];
+    return `http://${host}:3000`;
+  }
+
+  // @ts-ignore old expo
+  Constants.manifest?.hostUri;
   if (hostUri) return `http://${hostUri.split(':')[0]}:3000`;
   return 'http://localhost:3000';
 }
@@ -210,6 +217,15 @@ export default function MyProfile() {
           <Text style={styles.pageSubtitle}>Quản lý thông tin cá nhân</Text>
         </View>
 
+        {role === 'admin' ? (
+          <Pressable
+            onPress={() => router.push('/admin')}
+            style={({ pressed }) => [styles.adminManageBtn, pressed && styles.adminManageBtnPressed]}>
+            <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            <Text style={styles.adminManageBtnText}>Trang Quản Lý</Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           style={[styles.editToggleBtn, isEditing && styles.cancelBtn]}
           onPress={isEditing ? handleCancel : handleEdit}
@@ -241,7 +257,7 @@ export default function MyProfile() {
         {/* name / role */}
         {isEditing ? (
           <TextInput
-            style={[styles.nameInput]}
+            style={styles.nameInput}
             value={editData!.name}
             onChangeText={(t) => setEditData({ ...editData!, name: t })}
             placeholder="Tên hiển thị"
@@ -251,15 +267,6 @@ export default function MyProfile() {
           <Text style={styles.profileName}>{displayData.name}</Text>
         )}
         <Text style={styles.profileRole}>Người chơi SportMate</Text>
-
-        {role === 'admin' && (
-          <Pressable
-            onPress={() => router.push('/admin')}
-            style={({ pressed }) => [styles.adminManageBtn, pressed && styles.adminManageBtnPressed]}>
-            <Ionicons name="shield-checkmark" size={18} color="#fff" />
-            <Text style={styles.adminManageBtnText}>Trang Quản Lý</Text>
-          </Pressable>
-        )}
 
         {/* sport chips */}
         <View style={styles.chipGroup}>
@@ -448,7 +455,11 @@ export default function MyProfile() {
       {/* ── Save / Cancel buttons when editing ── */}
       {isEditing && (
         <View style={styles.saveRow}>
-          <Pressable style={[styles.saveBtn, saving && styles.saveBtnDisabled]} onPress={handleSave} disabled={saving}>
+          <Pressable
+            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
             {saving ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
@@ -483,6 +494,16 @@ export default function MyProfile() {
             <Ionicons name="trophy-outline" size={16} color="#aaa" />
             <Text style={styles.secondaryBtnText}>Trận Của Tôi</Text>
           </Pressable>
+
+          {role === 'owner' && (
+            <Pressable
+              style={styles.primaryBtn}
+              onPress={() => router.push('/courts/my-courts' as never)}
+            >
+              <Ionicons name="business-outline" size={18} color="#fff" />
+              <Text style={styles.primaryBtnText}>Quản Lý Sân Của Tôi</Text>
+            </Pressable>
+          )}
 
           <Pressable
             style={[styles.secondaryBtn, { borderColor: '#ff4d4f55' }]}

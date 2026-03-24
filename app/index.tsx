@@ -12,9 +12,9 @@ export default function RootIndex() {
   }
 
   if (!isAuthenticated) {
-    return <Redirect href="/(auth)/" />;
+    return <Redirect href="/(auth)" />;
   }
 
-  return <Redirect href="/(tabs)/" />;
+  return <Redirect href="/(tabs)" />;
 }
 
