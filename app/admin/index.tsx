@@ -56,6 +56,24 @@ function courtApprovalLabel(s: CourtApprovalStatus | undefined) {
   return 'Chờ duyệt';
 }
 
+type AdminReportStatus = 'pending' | 'reviewed' | 'resolved';
+type AdminReportItem = {
+  id: string;
+  reportedUserName: string;
+  reportedUserId: string;
+  reporterName: string;
+  reason: string;
+  matchTitle?: string;
+  createdAtLabel: string;
+  status: AdminReportStatus;
+};
+
+function reportStatusLabel(status: AdminReportStatus) {
+  if (status === 'pending') return 'Chờ xử lý';
+  if (status === 'reviewed') return 'Đã xem';
+  return 'Đã xử lý';
+}
+
 export default function AdminDashboard() {
   const { role, user: authUser } = useAuth();
   const { show, Alert: AppAlertNode } = useAppAlert();
@@ -117,9 +135,31 @@ export default function AdminDashboard() {
   }, [role]);
 
   const canManage = role === 'admin';
-  type AdminSubTab = 'dashboard' | 'users' | 'venues' | 'matches';
+  type AdminSubTab = 'dashboard' | 'users' | 'venues' | 'matches' | 'reports';
   const [adminSubTab, setAdminSubTab] = useState<AdminSubTab>('dashboard');
   const adminId = authUser?.id ?? '';
+  const [reportItems] = useState<AdminReportItem[]>([
+    {
+      id: 'rpt-1',
+      reportedUserName: 'Nguyen Van A',
+      reportedUserId: 'user_demo_001',
+      reporterName: 'Tran Thi B',
+      reason: 'Ngôn từ thiếu lịch sự trong trận đấu',
+      matchTitle: 'Bóng đá tối thứ 7',
+      createdAtLabel: '24/03/2026 10:15',
+      status: 'pending',
+    },
+    {
+      id: 'rpt-2',
+      reportedUserName: 'Le Van C',
+      reportedUserId: 'user_demo_002',
+      reporterName: 'Pham D',
+      reason: 'Không đến sân nhưng không báo trước',
+      matchTitle: 'Cầu lông giao hữu',
+      createdAtLabel: '23/03/2026 21:40',
+      status: 'reviewed',
+    },
+  ]);
 
   useEffect(() => {
     if (role !== 'admin') return;
@@ -492,6 +532,51 @@ export default function AdminDashboard() {
         </View>
       ) : null}
 
+      {adminSubTab === 'reports' ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Report người chơi</Text>
+          <Text style={styles.mutedText}>
+            Đây là giao diện tạm. Sau khi backend report hoàn thiện sẽ nối dữ liệu thật.
+          </Text>
+
+          <View style={{ marginTop: 12 }}>
+            {reportItems.length === 0 ? (
+              <Text style={styles.mutedText}>Chưa có report nào.</Text>
+            ) : (
+              reportItems.map((r) => (
+                <View key={r.id} style={styles.listCard}>
+                  <View style={styles.listTopRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.listTitle}>
+                        User bị report: {r.reportedUserName}{' '}
+                        <Text style={styles.listMeta}>({r.reportedUserId})</Text>
+                      </Text>
+                      <Text style={styles.listMeta}>Người report: {r.reporterName}</Text>
+                      {r.matchTitle ? <Text style={styles.listMeta}>Trận: {r.matchTitle}</Text> : null}
+                      <Text style={styles.listMeta}>Lý do: {r.reason}</Text>
+                      <Text style={styles.listMeta}>Thời gian: {r.createdAtLabel}</Text>
+                    </View>
+                    <View>
+                      <View
+                        style={[
+                          styles.pill,
+                          r.status === 'resolved'
+                            ? styles.pillApproved
+                            : r.status === 'reviewed'
+                              ? styles.pillRejected
+                              : styles.pillPending,
+                        ]}>
+                        <Text style={styles.pillText}>{reportStatusLabel(r.status)}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        </View>
+      ) : null}
+
       {AppAlertNode}
       </ScrollView>
       <View style={styles.subTabsBar}>
@@ -561,6 +646,22 @@ export default function AdminDashboard() {
               adminSubTab === 'matches' && styles.subTabLabelActive,
             ]}>
             Trận đấu
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setAdminSubTab('reports')}
+          style={({ pressed }) => [
+            styles.subTabBtn,
+            adminSubTab === 'reports' && styles.subTabBtnActive,
+            pressed && { opacity: 0.9 },
+          ]}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={18}
+            color={adminSubTab === 'reports' ? PRIMARY : '#888'}
+          />
+          <Text style={[styles.subTabLabel, adminSubTab === 'reports' && styles.subTabLabelActive]}>
+            Report
           </Text>
         </Pressable>
       </View>
