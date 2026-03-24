@@ -105,9 +105,47 @@ async function getRanking(req, res) {
   }
 }
 
+async function toggleFavorite(req, res) {
+  try {
+    const { id } = req.params;          // ID người được yêu thích
+    const { fromUserId } = req.body;    // ID người đang ấn yêu thích
+
+    if (!fromUserId) {
+      return res.status(400).json({ error: 'Thiếu fromUserId' });
+    }
+
+    const target = await User.findById(id);
+    if (!target) {
+      return res.status(404).json({ error: 'Không tìm thấy người dùng' });
+    }
+
+    const alreadyFavorited = target.favorites
+      .map(String)
+      .includes(String(fromUserId));
+
+    if (alreadyFavorited) {
+      // Bỏ thích → xóa khỏi mảng
+      await User.findByIdAndUpdate(id, { $pull: { favorites: fromUserId } });
+    } else {
+      // Yêu thích → thêm vào mảng (addToSet tránh trùng)
+      await User.findByIdAndUpdate(id, { $addToSet: { favorites: fromUserId } });
+    }
+
+    const updated = await User.findById(id).select('favorites').lean();
+    return res.json({
+      favorited: !alreadyFavorited,
+      favoritesCount: updated?.favorites?.length ?? 0,
+    });
+  } catch (error) {
+    console.error('toggleFavorite error:', error);
+    return res.status(500).json({ error: 'Thao tác yêu thích thất bại' });
+  }
+}
+
 module.exports = {
   uploadAvatar,
   getUser,
   updateUser,
   getRanking,
+  toggleFavorite,
 };

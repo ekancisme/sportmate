@@ -34,7 +34,7 @@ type UserProfile = {
     matchesWon: number;
     winRate: number;
     hoursActive: number;
-    followers: number;
+    favoritesCount: number;
   };
   schedule: UserScheduleItem[];
 };
@@ -93,7 +93,7 @@ export default function MyProfile() {
         matchesWon: 0,
         winRate: authUser.stats?.winRate ?? 0,
         hoursActive: authUser.stats?.hoursActive ?? 0,
-        followers: authUser.stats?.followers ?? 0,
+        favoritesCount: authUser.favorites?.length ?? 0,
       },
       schedule: (authUser.schedule ?? []).map((s) => ({
         day: s.day,
@@ -257,7 +257,7 @@ export default function MyProfile() {
         <StatCard label="Trận Đấu" value={String(profile.stats.matchesPlayed)} />
         <StatCard label="Tỷ Lệ Thắng" value={`${profile.stats.winRate}%`} />
         <StatCard label="Giờ HĐ" value={String(profile.stats.hoursActive)} />
-        <StatCard label="Theo Dõi" value={String(profile.stats.followers)} />
+        <StatCard label="Yêu Thích" value={String(profile.stats.favoritesCount)} />
       </View>
 
       {/* ── Thông Tin Liên Hệ ── */}
