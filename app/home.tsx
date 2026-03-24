@@ -14,15 +14,10 @@ import {
 } from "react-native";
 
 import { useAuth, type SuggestedPartner } from "@/contexts/AuthContext";
-import {
-  fetchMatches,
-  formatDateVi,
-  type ApiMatch,
-} from "@/lib/matchApi";
-import { resolveAvatarUrl } from "@/lib/userApi";
+import { getApiBaseUrl } from "@/lib/apiBase";
 import { requestCurrentLocation } from "@/lib/locationUtils";
-import { computeDisplayStatus } from "@/lib/matchStatus";
-import { StatusBadge } from "@/components/StatusBadge";
+import { fetchMatches, formatDateVi, type ApiMatch } from "@/lib/matchApi";
+import { resolveAvatarUrl } from "@/lib/userApi";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -54,8 +49,8 @@ const SPORT_EMOJI: Record<string, string> = {
 };
 
 function getSportEmoji(sport: string): string {
-  const key = Object.keys(SPORT_EMOJI).find(
-    (k) => sport.toLowerCase().includes(k.toLowerCase()),
+  const key = Object.keys(SPORT_EMOJI).find((k) =>
+    sport.toLowerCase().includes(k.toLowerCase()),
   );
   return key ? SPORT_EMOJI[key] : SPORT_EMOJI.default;
 }
@@ -80,6 +75,11 @@ export default function HomeScreen() {
   const [matchesLoading, setMatchesLoading] = useState(true);
   const [matchesError, setMatchesError] = useState<string | null>(null);
 
+  const upcomingMatches = useMemo(
+    () => matches.filter((m) => m.status !== "finished" && m.status !== "cancelled"),
+    [matches],
+  );
+
   const partnerPages = useMemo(
     () => chunkPlayers(partners, PARTNERS_PER_PAGE),
     [partners],
@@ -93,8 +93,22 @@ export default function HomeScreen() {
         latitude: location.latitude,
         longitude: location.longitude,
       });
+
+      // Lưu location vào DB nếu user đã đăng nhập
+      if (user?.id && location.address) {
+        try {
+          const apiBase = getApiBaseUrl();
+          await fetch(`${apiBase}/api/users/${user.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ location: location.address }),
+          });
+        } catch (e) {
+          console.error("Failed to save location to DB", e);
+        }
+      }
     }
-  }, []);
+  }, [user?.id]);
 
   const loadPartners = useCallback(async () => {
     setPartnersLoading(true);
@@ -173,60 +187,6 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Trận tuần này</Text>
-          <Text style={styles.statValue}>{matches.length || "..."}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Đồng đội quanh bạn</Text>
-          <Text style={styles.statValue}>
-            {partnersLoading ? "..." : partners.length}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.locationCard}>
-        <View style={styles.locationContent}>
-          <Text style={styles.locationIcon}>📍</Text>
-          {currentLocation ? (
-            <Text style={styles.locationText}>{currentLocation.address}</Text>
-          ) : (
-            <Pressable onPress={requestLocation}>
-              <Text style={styles.locationRequestText}>
-                Nhấn để cập nhật vị trí của bạn
-              </Text>
-            </Pressable>
-          )}
-        </View>
-        {!currentLocation && (
-          <Pressable style={styles.locationBtn} onPress={requestLocation}>
-            <Text style={styles.locationBtnText}>📍 Cập nhật</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <View style={styles.quickRow}>
-        <Pressable
-          style={styles.quickCard}
-          onPress={() => router.push("/my-profile")}
-        >
-          <Text style={styles.quickTitle}>Hồ sơ của bạn</Text>
-          <Text style={styles.quickSubtitle}>
-            Cập nhật môn thể thao và lịch tập
-          </Text>
-        </Pressable>
-        <Pressable
-          style={styles.quickCard}
-          onPress={() => router.push("/match")}
-        >
-          <Text style={styles.quickTitle}>Trận nổi bật</Text>
-          <Text style={styles.quickSubtitle}>
-            Xem chi tiết các trận đang mở
-          </Text>
-        </Pressable>
-      </View>
-
       <View style={styles.section}>
         <View style={styles.partnerSectionHeader}>
           <Text style={styles.sectionTitle}>Những partner tuyệt vời</Text>
@@ -296,7 +256,7 @@ export default function HomeScreen() {
                       </Text>
                       <View style={styles.partnerChipsRow}>
                         <View style={styles.partnerChipLocation}>
-                          <Text style={styles.partnerChipText}>
+                          <Text style={styles.partnerChipText} numberOfLines={1}>
                             {p.location || "Không rõ vị trí"}
                           </Text>
                         </View>
@@ -334,7 +294,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Trận đấu sắp diễn ra</Text>
-          {!matchesLoading && matches.length > 0 && (
+          {!matchesLoading && upcomingMatches.length > 0 && (
             <Pressable onPress={() => router.push("/match")}>
               <Text style={styles.seeAllText}>Xem tất cả</Text>
             </Pressable>
@@ -353,7 +313,7 @@ export default function HomeScreen() {
               <Text style={styles.matchesRetryText}>Thử lại</Text>
             </Pressable>
           </View>
-        ) : matches.length === 0 ? (
+        ) : upcomingMatches.length === 0 ? (
           <View style={styles.matchesEmptyCard}>
             <Text style={styles.matchesEmptyIcon}>🏟️</Text>
             <Text style={styles.matchesEmptyTitle}>Chưa có trận nào</Text>
@@ -369,12 +329,13 @@ export default function HomeScreen() {
           </View>
         ) : (
           <View style={styles.matchesList}>
-            {matches.slice(0, 5).map((m) => {
+            {upcomingMatches.slice(0, 5).map((m) => {
               const cur = Number(m.currentPlayers ?? 0);
               const max = Number(m.maxPlayers);
               const pct = max > 0 ? Math.min(1, cur / max) : 0;
               const hostAvatar = resolveAvatarUrl(m.host?.avatar);
-              const hostName = m.host?.name || m.host?.username || "Người tổ chức";
+              const hostName =
+                m.host?.name || m.host?.username || "Người tổ chức";
               return (
                 <Pressable
                   key={m.id}
@@ -409,9 +370,6 @@ export default function HomeScreen() {
                     <Text style={styles.matchTitle} numberOfLines={1}>
                       {m.title}
                     </Text>
-                    <View style={{ marginBottom: 6 }}>
-                      <StatusBadge status={computeDisplayStatus(m.status ?? 'active', m.date, m.time)} size="sm" />
-                    </View>
                     <View style={styles.matchMetaRow}>
                       <Text style={styles.matchMetaIcon}>📍</Text>
                       <Text style={styles.matchMetaText} numberOfLines={1}>
@@ -707,6 +665,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 50,
     backgroundColor: "#ff4d4d",
+    maxWidth: 160,
   },
   partnerChipText: {
     color: "#ffffff",
