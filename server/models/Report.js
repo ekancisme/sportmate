@@ -6,6 +6,19 @@ const reportSchema = new mongoose.Schema(
     reporterHostId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     reportedUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     reason: { type: String, required: true, trim: true },
+    status: {
+      type: String,
+      enum: ['pending', 'reviewed', 'resolved'],
+      default: 'pending',
+    },
+    warningSentAt: { type: Date, default: null },
+    warningNote: { type: String, default: '' },
+    resolvedAt: { type: Date, default: null },
+    resolvedAction: {
+      type: String,
+      enum: ['', 'warned', 'banned'],
+      default: '',
+    },
   },
   { timestamps: true },
 );
