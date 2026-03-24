@@ -44,8 +44,6 @@ async function updateUser(req, res) {
       'name',
       'age',
       'location',
-      'latitude',
-      'longitude',
       'bio',
       'email',
       'phone',

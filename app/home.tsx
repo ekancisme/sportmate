@@ -83,28 +83,23 @@ export default function HomeScreen() {
   const requestLocation = useCallback(async () => {
     const location = await requestCurrentLocation();
     if (location) {
-      const newLoc = {
+      setCurrentLocation({
         address: location.address,
         latitude: location.latitude,
         longitude: location.longitude,
-      };
-      setCurrentLocation(newLoc);
+      });
 
-      // Auto-save GPS + address to DB for current user
-      if (user?.id) {
+      // Lưu location vào DB nếu user đã đăng nhập
+      if (user?.id && location.address) {
         try {
           const apiBase = getApiBaseUrl();
           await fetch(`${apiBase}/api/users/${user.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              latitude: location.latitude,
-              longitude: location.longitude,
-              location: location.address || "",
-            }),
+            body: JSON.stringify({ location: location.address }),
           });
-        } catch {
-          // silent fail - don't block the UI
+        } catch (e) {
+          console.error("Failed to save location to DB", e);
         }
       }
     }
@@ -114,12 +109,7 @@ export default function HomeScreen() {
     setPartnersLoading(true);
     setPartnersError(null);
     try {
-      const result = await fetchSuggestedPartners({
-        limit: 20,
-        latitude: currentLocation?.latitude,
-        longitude: currentLocation?.longitude,
-        userLocation: currentLocation?.address,
-      });
+      const result = await fetchSuggestedPartners({ limit: 20 });
       setPartners(result.partners);
     } catch (e) {
       setPartnersError(
@@ -129,7 +119,7 @@ export default function HomeScreen() {
     } finally {
       setPartnersLoading(false);
     }
-  }, [fetchSuggestedPartners, user?.id, currentLocation]);
+  }, [fetchSuggestedPartners, user?.id, currentLocation?.address]);
 
   const loadMatches = useCallback(async () => {
     setMatchesLoading(true);
@@ -190,60 +180,6 @@ export default function HomeScreen() {
             <Text style={styles.buttonGhostText}>Xem bảng xếp hạng</Text>
           </Pressable>
         </View>
-      </View>
-
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Trận tuần này</Text>
-          <Text style={styles.statValue}>{matches.length || "..."}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Đồng đội quanh bạn</Text>
-          <Text style={styles.statValue}>
-            {partnersLoading ? "..." : partners.length}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.locationCard}>
-        <View style={styles.locationContent}>
-          <Text style={styles.locationIcon}>📍</Text>
-          {currentLocation ? (
-            <Text style={styles.locationText}>{currentLocation.address}</Text>
-          ) : (
-            <Pressable onPress={requestLocation}>
-              <Text style={styles.locationRequestText}>
-                Nhấn để cập nhật vị trí của bạn
-              </Text>
-            </Pressable>
-          )}
-        </View>
-        {!currentLocation && (
-          <Pressable style={styles.locationBtn} onPress={requestLocation}>
-            <Text style={styles.locationBtnText}>📍 Cập nhật</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <View style={styles.quickRow}>
-        <Pressable
-          style={styles.quickCard}
-          onPress={() => router.push("/my-profile")}
-        >
-          <Text style={styles.quickTitle}>Hồ sơ của bạn</Text>
-          <Text style={styles.quickSubtitle}>
-            Cập nhật môn thể thao và lịch tập
-          </Text>
-        </Pressable>
-        <Pressable
-          style={styles.quickCard}
-          onPress={() => router.push("/match")}
-        >
-          <Text style={styles.quickTitle}>Trận nổi bật</Text>
-          <Text style={styles.quickSubtitle}>
-            Xem chi tiết các trận đang mở
-          </Text>
-        </Pressable>
       </View>
 
       <View style={styles.section}>

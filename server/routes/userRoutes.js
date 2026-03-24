@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
     }
     
     const users = await User.find(query)
-      .select('name username avatar location latitude longitude bio stats sports')
+      .select('name username avatar location bio stats sports')
       .limit(Number(limit))
       .lean();
     
@@ -32,8 +32,6 @@ router.get('/', async (req, res) => {
       username: u.username,
       avatar: u.avatar,
       location: u.location,
-      latitude: u.latitude,
-      longitude: u.longitude,
       bio: u.bio,
       winRate: u.stats?.winRate || 0,
       matchesPlayed: u.stats?.matchesPlayed || 0,
