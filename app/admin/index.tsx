@@ -28,6 +28,13 @@ import {
   type AdminVenue,
   type AdminVenueStatus,
 } from '@/lib/adminApi';
+import {
+  approveCourtAdmin,
+  fetchAllCourtsAdmin,
+  rejectCourtAdmin,
+  type ApiCourt,
+  type CourtApprovalStatus,
+} from '@/lib/courtApi';
 import { fetchMatches, type ApiMatch, type MatchStatus } from '@/lib/matchApi';
 
 const PRIMARY = '#ff4d4f';
@@ -42,6 +49,13 @@ function statusLabel(s: AdminVenueStatus) {
   return 'Từ chối';
 }
 
+function courtApprovalLabel(s: CourtApprovalStatus | undefined) {
+  if (s === 'pending') return 'Chờ duyệt';
+  if (s === 'active') return 'Đã duyệt';
+  if (s === 'rejected') return 'Từ chối';
+  return 'Chờ duyệt';
+}
+
 export default function AdminDashboard() {
   const { role, user: authUser } = useAuth();
   const { show, Alert: AppAlertNode } = useAppAlert();
@@ -53,11 +67,14 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [venues, setVenues] = useState<AdminVenue[]>([]);
   const [pendingVenues, setPendingVenues] = useState<AdminVenue[]>([]);
+  const [allCourts, setAllCourts] = useState<ApiCourt[]>([]);
 
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
+  const [rejectCourtReasons, setRejectCourtReasons] = useState<Record<string, string>>({});
 
   const [selectedVenue, setSelectedVenue] = useState<AdminVenue | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [selectedCourt, setSelectedCourt] = useState<ApiCourt | null>(null);
 
   const [matches, setMatches] = useState<ApiMatch[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
@@ -75,16 +92,18 @@ export default function AdminDashboard() {
     setError(null);
 
     try {
-      const [s, u, v, p] = await Promise.all([
+      const [s, u, v, p, c] = await Promise.all([
         fetchAdminStats(),
         fetchAdminUsers(),
         fetchAdminVenues('active'),
         fetchPendingVenues(),
+        fetchAllCourtsAdmin(),
       ]);
       setStats(s);
       setUsers(u);
       setVenues(v);
       setPendingVenues(p);
+      setAllCourts(c);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Tải admin thất bại');
     } finally {
@@ -173,6 +192,41 @@ export default function AdminDashboard() {
     }
   };
 
+  const onApproveCourt = async (courtId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await approveCourtAdmin(courtId);
+      await reloadAll();
+      if (selectedCourt?.id === courtId) setSelectedCourt(null);
+      show('Đã duyệt', 'Sân đã được duyệt và hiển thị public.', { variant: 'info' });
+    } catch (e) {
+      show('Lỗi', e instanceof Error ? e.message : 'Duyệt thất bại', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRejectCourt = async (courtId: string) => {
+    const reason = (rejectCourtReasons[courtId] ?? '').trim();
+    if (reason.length < 3) {
+      show('Thiếu lý do', 'Vui lòng nhập lý do từ chối (ít nhất 3 ký tự).', { variant: 'error' });
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await rejectCourtAdmin(courtId, reason);
+      await reloadAll();
+      if (selectedCourt?.id === courtId) setSelectedCourt(null);
+      show('Đã từ chối', 'Sân đã bị từ chối.', { variant: 'info' });
+    } catch (e) {
+      show('Lỗi', e instanceof Error ? e.message : 'Từ chối thất bại', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const venueCard = useMemo(() => {
     const renderStatusPill = (s: AdminVenueStatus) => (
       <View
@@ -193,7 +247,29 @@ export default function AdminDashboard() {
     };
   }, []);
 
+  const courtApprovalPill = (s: CourtApprovalStatus | undefined) => (
+    <View
+      style={[
+        styles.pill,
+        s === 'active'
+          ? styles.pillApproved
+          : s === 'rejected'
+          ? styles.pillRejected
+          : styles.pillPending,
+      ]}>
+      <Text style={styles.pillText}>{courtApprovalLabel(s)}</Text>
+    </View>
+  );
+
   const allVenues = useMemo(() => [...pendingVenues, ...venues], [pendingVenues, venues]);
+
+  // Sắp xếp: pending lên đầu, sau đó active, cuối cùng rejected
+  const sortedCourts = useMemo(() => {
+    const order: Record<string, number> = { pending: 0, active: 1, rejected: 2 };
+    return [...allCourts].sort(
+      (a, b) => (order[a.approvalStatus ?? 'pending'] ?? 0) - (order[b.approvalStatus ?? 'pending'] ?? 0),
+    );
+  }, [allCourts]);
 
   if (!canManage) {
     return (
@@ -251,11 +327,11 @@ export default function AdminDashboard() {
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>Sân chờ duyệt</Text>
-              <Text style={styles.statValue}>{stats?.venues.pending ?? 0}</Text>
+              <Text style={[styles.statValue, { color: '#f5a623' }]}>{stats?.courts?.pending ?? 0}</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>Sân đã duyệt</Text>
-              <Text style={styles.statValue}>{stats?.venues.active ?? 0}</Text>
+              <Text style={[styles.statValue, { color: '#4caf50' }]}>{stats?.courts?.active ?? 0}</Text>
             </View>
           </View>
         </View>
@@ -306,22 +382,32 @@ export default function AdminDashboard() {
           <Text style={styles.sectionTitle}>Quản lý sân cho thuê</Text>
 
           <View style={{ marginTop: 12 }}>
-            {allVenues.length === 0 ? <Text style={styles.mutedText}>Chưa có sân.</Text> : null}
-            {allVenues.slice(0, 30).map((v) => (
+            {sortedCourts.length === 0 ? <Text style={styles.mutedText}>Chưa có sân.</Text> : null}
+            {sortedCourts.slice(0, 50).map((c) => (
               <Pressable
-                key={v.id}
-                onPress={() => setSelectedVenue(v)}
+                key={c.id}
+                onPress={() => setSelectedCourt(c)}
                 style={({ pressed }) => [styles.listCard, pressed && { opacity: 0.9 }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.listTitle}>
-                    {v.name} <Text style={styles.listMeta}>• {v.sport || 'Không rõ môn'}</Text>
+                    {c.name} <Text style={styles.listMeta}>• {c.sportLabel || 'Không rõ môn'}</Text>
                   </Text>
                   <Text style={styles.listMeta}>
-                    {v.address || 'Chưa có địa chỉ'} • {v.pricePerHour.toLocaleString()}đ/giờ
+                    {c.address || 'Chưa có địa chỉ'} • {c.pricePerHour.toLocaleString()}đ/giờ
                   </Text>
+                  {c.owner ? (
+                    <Text style={styles.listMeta}>Chủ: {c.owner.name || c.owner.username || '—'}</Text>
+                  ) : null}
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                  {venueCard.renderStatusPill(v.status)}
+                  {courtApprovalPill(c.approvalStatus)}
+                  {c.approvalStatus === 'pending' ? (
+                    <Pressable
+                      style={[styles.actionBtn, styles.actionBtnPrimary, { paddingVertical: 6 }]}
+                      onPress={() => onApproveCourt(c.id)}>
+                      <Text style={styles.actionBtnText}>Duyệt</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </Pressable>
             ))}
@@ -582,6 +668,88 @@ export default function AdminDashboard() {
 
               <View style={{ height: 6 }} />
               <Pressable style={styles.actionBtn} onPress={() => setSelectedVenue(null)}>
+                <Text style={styles.actionBtnText}>Đóng</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </Modal>
+
+      {/* Modal chi tiết Court */}
+      <Modal
+        visible={selectedCourt !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedCourt(null)}>
+        {selectedCourt ? (
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>Chi tiết sân đăng ký</Text>
+                <Pressable style={styles.modalCloseBtn} onPress={() => setSelectedCourt(null)}>
+                  <Text style={styles.modalCloseBtnText}>X</Text>
+                </Pressable>
+              </View>
+
+              <View style={{ marginBottom: 10 }}>
+                {courtApprovalPill(selectedCourt.approvalStatus)}
+              </View>
+
+              <Text style={styles.modalName}>{selectedCourt.name}</Text>
+              <Text style={styles.modalMeta}>
+                {selectedCourt.sportLabel || 'Không rõ môn'} •{' '}
+                {selectedCourt.pricePerHour.toLocaleString()}đ/giờ
+              </Text>
+              <Text style={styles.modalMeta}>{selectedCourt.address || 'Chưa có địa chỉ'}</Text>
+              {selectedCourt.owner ? (
+                <Text style={styles.modalMeta}>
+                  Chủ sân: {selectedCourt.owner.name || selectedCourt.owner.username || '—'}
+                </Text>
+              ) : null}
+              <Text style={styles.modalMeta}>
+                Giờ mở: {selectedCourt.openTime} – {selectedCourt.closeTime}
+              </Text>
+              {selectedCourt.description ? (
+                <Text style={styles.modalBodyText}>{selectedCourt.description}</Text>
+              ) : (
+                <Text style={styles.modalBodyText}>Chưa có mô tả.</Text>
+              )}
+
+              {selectedCourt.approvalStatus === 'rejected' && selectedCourt.rejectReason ? (
+                <Text style={[styles.modalMeta, { color: '#ff8888', marginTop: 6 }]}>
+                  Lý do từ chối: {selectedCourt.rejectReason}
+                </Text>
+              ) : null}
+
+              {selectedCourt.approvalStatus === 'pending' ? (
+                <>
+                  <Text style={styles.modalSectionTitle}>Lý do từ chối (nếu cần)</Text>
+                  <TextInput
+                    style={[styles.input, styles.rejectInput]}
+                    placeholder="Nhập lý do từ chối..."
+                    placeholderTextColor="#777"
+                    value={rejectCourtReasons[selectedCourt.id] ?? ''}
+                    onChangeText={(t) =>
+                      setRejectCourtReasons((prev) => ({ ...prev, [selectedCourt.id]: t }))
+                    }
+                  />
+                  <View style={styles.modalActionsRow}>
+                    <Pressable
+                      style={[styles.actionBtn, styles.actionBtnPrimary]}
+                      onPress={() => onApproveCourt(selectedCourt.id)}>
+                      <Text style={styles.actionBtnText}>✓ Duyệt</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.actionBtn, styles.actionBtnSecondary]}
+                      onPress={() => onRejectCourt(selectedCourt.id)}>
+                      <Text style={styles.actionBtnText}>✕ Từ chối</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
+
+              <View style={{ height: 6 }} />
+              <Pressable style={styles.actionBtn} onPress={() => setSelectedCourt(null)}>
                 <Text style={styles.actionBtnText}>Đóng</Text>
               </Pressable>
             </View>

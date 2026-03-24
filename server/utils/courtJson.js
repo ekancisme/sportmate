@@ -47,6 +47,8 @@ function courtJsonWithOwner(doc) {
     images: normalizedImages,
     imageUrl: normalizedImages[0] || '',
     visibilityStatus: j.visibilityStatus || 'active',
+    approvalStatus: j.approvalStatus || 'pending',
+    rejectReason: j.rejectReason || '',
     openTime: j.openTime || '06:00',
     closeTime: j.closeTime || '22:00',
     slotMinutes: Number(j.slotMinutes) || 60,

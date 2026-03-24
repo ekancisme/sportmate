@@ -4,6 +4,7 @@ import { getCourtSportLabel, type CourtSportKey } from '@/constants/courtSports'
 import { getApiBaseUrl } from '@/lib/apiBase';
 
 export type CourtVisibilityStatus = 'active' | 'hidden';
+export type CourtApprovalStatus = 'pending' | 'active' | 'rejected';
 export type CourtBookingStatus = 'booked' | 'cancelled_by_user' | 'cancelled_by_owner';
 
 export type ApiCourtOwner = {
@@ -29,6 +30,8 @@ export type ApiCourt = {
   imageUrl: string;
   contactPhone: string;
   visibilityStatus: CourtVisibilityStatus;
+  approvalStatus?: CourtApprovalStatus;
+  rejectReason?: string;
   openTime: string;
   closeTime: string;
   slotMinutes: number;
@@ -232,6 +235,17 @@ export async function deleteCourt(courtId: string, ownerId: string): Promise<voi
   await parseResponse(res, 'Không xóa được sân');
 }
 
+export async function resubmitCourtOwner(courtId: string, ownerId: string): Promise<ApiCourt> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/courts/${encodeURIComponent(courtId)}/resubmit`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ownerId }),
+  });
+  const data = await parseResponse<ApiCourt>(res, 'Không đăng lại được sân');
+  return normalizeCourt(data);
+}
+
 export async function uploadCourtImages(
   courtId: string,
   ownerId: string,
@@ -315,4 +329,36 @@ export async function cancelCourtBooking(bookingId: string, actorId: string): Pr
     body: JSON.stringify({ actorId }),
   });
   return parseResponse<ApiCourtBooking>(res, 'Không hủy được booking');
+}
+
+// ─── Admin court functions ────────────────────────────────────────────────
+
+/** Lấy toàn bộ sân (kể cả pending/rejected) dành cho admin. */
+export async function fetchAllCourtsAdmin(): Promise<ApiCourt[]> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/admin/courts`);
+  const data = await parseResponse<ApiCourt[]>(res, 'Không tải được danh sách sân');
+  return data.map((item) => normalizeCourt(item));
+}
+
+/** Admin duyệt sân: chuyển approvalStatus thành 'active'. */
+export async function approveCourtAdmin(courtId: string): Promise<ApiCourt> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/admin/courts/${encodeURIComponent(courtId)}/approve`, {
+    method: 'PATCH',
+  });
+  const data = await parseResponse<ApiCourt>(res, 'Duyệt sân thất bại');
+  return normalizeCourt(data);
+}
+
+/** Admin từ chối sân kèm lý do. */
+export async function rejectCourtAdmin(courtId: string, reason: string): Promise<ApiCourt> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/admin/courts/${encodeURIComponent(courtId)}/reject`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
+  const data = await parseResponse<ApiCourt>(res, 'Từ chối sân thất bại');
+  return normalizeCourt(data);
 }
