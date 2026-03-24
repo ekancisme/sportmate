@@ -75,6 +75,11 @@ export default function HomeScreen() {
   const [matchesLoading, setMatchesLoading] = useState(true);
   const [matchesError, setMatchesError] = useState<string | null>(null);
 
+  const upcomingMatches = useMemo(
+    () => matches.filter((m) => m.status !== "finished" && m.status !== "cancelled"),
+    [matches],
+  );
+
   const partnerPages = useMemo(
     () => chunkPlayers(partners, PARTNERS_PER_PAGE),
     [partners],
@@ -251,7 +256,7 @@ export default function HomeScreen() {
                       </Text>
                       <View style={styles.partnerChipsRow}>
                         <View style={styles.partnerChipLocation}>
-                          <Text style={styles.partnerChipText}>
+                          <Text style={styles.partnerChipText} numberOfLines={1}>
                             {p.location || "Không rõ vị trí"}
                           </Text>
                         </View>
@@ -289,7 +294,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Trận đấu sắp diễn ra</Text>
-          {!matchesLoading && matches.length > 0 && (
+          {!matchesLoading && upcomingMatches.length > 0 && (
             <Pressable onPress={() => router.push("/match")}>
               <Text style={styles.seeAllText}>Xem tất cả</Text>
             </Pressable>
@@ -308,7 +313,7 @@ export default function HomeScreen() {
               <Text style={styles.matchesRetryText}>Thử lại</Text>
             </Pressable>
           </View>
-        ) : matches.length === 0 ? (
+        ) : upcomingMatches.length === 0 ? (
           <View style={styles.matchesEmptyCard}>
             <Text style={styles.matchesEmptyIcon}>🏟️</Text>
             <Text style={styles.matchesEmptyTitle}>Chưa có trận nào</Text>
@@ -324,7 +329,7 @@ export default function HomeScreen() {
           </View>
         ) : (
           <View style={styles.matchesList}>
-            {matches.slice(0, 5).map((m) => {
+            {upcomingMatches.slice(0, 5).map((m) => {
               const cur = Number(m.currentPlayers ?? 0);
               const max = Number(m.maxPlayers);
               const pct = max > 0 ? Math.min(1, cur / max) : 0;
@@ -660,6 +665,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 50,
     backgroundColor: "#ff4d4d",
+    maxWidth: 160,
   },
   partnerChipText: {
     color: "#ffffff",
