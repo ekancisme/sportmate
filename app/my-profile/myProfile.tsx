@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +13,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -64,25 +64,7 @@ const API_BASE = getApiBaseUrl();
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MyProfile() {
-<<<<<<< HEAD
-  const { user: authUser, setUserFromServer, logout } = useAuth();
-=======
-  const { logout, user: authUser, role } = useAuth();
-  const apiBase = getApiBaseUrl();
-  const [user, setUser] = useState<UserProfile>(EMPTY_PROFILE);
-  const isOwner = authUser?.role === 'owner';
-  const profileRoleLabel =
-    authUser?.role === 'owner'
-      ? 'SportMate owner'
-      : authUser?.role === 'admin'
-        ? 'SportMate admin'
-        : 'Người chơi SportMate';
-
-  const [myMatches, setMyMatches] = useState<ApiMatch[]>([]);
-  const [matchesLoading, setMatchesLoading] = useState(false);
-  const [matchesErr, setMatchesErr] = useState<string | null>(null);
-
->>>>>>> 88f491198664bb8d70eedab35464a8c82d56dd43
+  const { user: authUser, setUserFromServer, logout, role } = useAuth();
 
   // ── state ──
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -234,12 +216,6 @@ export default function MyProfile() {
           <Text style={styles.pageTitle}>Hồ Sơ Của Tôi</Text>
           <Text style={styles.pageSubtitle}>Quản lý thông tin cá nhân</Text>
         </View>
-<<<<<<< HEAD
-=======
-
-        <Text style={styles.profileName}>{user.name}</Text>
-        <Text style={styles.profileRole}>{profileRoleLabel}</Text>
-        <Text style={styles.profileRole}>Người chơi SportMate</Text>
 
         {role === 'admin' ? (
           <Pressable
@@ -250,77 +226,71 @@ export default function MyProfile() {
           </Pressable>
         ) : null}
 
->>>>>>> 88f491198664bb8d70eedab35464a8c82d56dd43
-  <Pressable
-    style={[styles.editToggleBtn, isEditing && styles.cancelBtn]}
-    onPress={isEditing ? handleCancel : handleEdit}
-  >
-    <Ionicons name={isEditing ? 'close' : 'create-outline'} size={16} color="#fff" />
-    <Text style={styles.editToggleBtnText}>{isEditing ? 'Hủy' : 'Chỉnh Sửa'}</Text>
-  </Pressable>
-      </View >
-
-    {/* ── Profile Card ── */ }
-    < View style = { styles.profileCard } >
-      {/* avatar */ }
-      < Pressable
-  style = { styles.avatarWrapper }
-  onPress = {() => router.push('/my-profile/edit')
-}
+        <Pressable
+          style={[styles.editToggleBtn, isEditing && styles.cancelBtn]}
+          onPress={isEditing ? handleCancel : handleEdit}
         >
-{
-  avatarUri?(
-            <Image source = {{ uri: avatarUri }} style = { styles.avatarImage } />
+          <Ionicons name={isEditing ? 'close' : 'create-outline'} size={16} color="#fff" />
+          <Text style={styles.editToggleBtnText}>{isEditing ? 'Hủy' : 'Chỉnh Sửa'}</Text>
+        </Pressable>
+      </View>
+
+      {/* ── Profile Card ── */}
+      <View style={styles.profileCard}>
+        {/* avatar */}
+        <Pressable
+          style={styles.avatarWrapper}
+          onPress={() => router.push('/my-profile/edit')}
+        >
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
           ) : (
-  <View style={styles.avatarFallback}>
-    <Text style={styles.avatarInitial}>{displayData.name.charAt(0) || 'S'}</Text>
-  </View>
-)}
-<View style={styles.avatarBadge}>
-  <Ionicons name="camera" size={12} color="#fff" />
-</View>
-        </Pressable >
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarInitial}>{displayData.name.charAt(0) || 'S'}</Text>
+            </View>
+          )}
+          <View style={styles.avatarBadge}>
+            <Ionicons name="camera" size={12} color="#fff" />
+          </View>
+        </Pressable>
 
-  {/* name / role */ }
-{
-  isEditing ? (
-    <TextInput
-      style={[styles.nameInput]}
-      value={editData!.name}
-      onChangeText={(t) => setEditData({ ...editData!, name: t })}
-      placeholder="Tên hiển thị"
-      placeholderTextColor="#666"
-    />
-  ) : (
-    <Text style={styles.profileName}>{displayData.name}</Text>
-  )
-}
-<Text style={styles.profileRole}>Người chơi SportMate</Text>
+        {/* name / role */}
+        {isEditing ? (
+          <TextInput
+            style={styles.nameInput}
+            value={editData!.name}
+            onChangeText={(t) => setEditData({ ...editData!, name: t })}
+            placeholder="Tên hiển thị"
+            placeholderTextColor="#666"
+          />
+        ) : (
+          <Text style={styles.profileName}>{displayData.name}</Text>
+        )}
+        <Text style={styles.profileRole}>Người chơi SportMate</Text>
 
-{/* sport chips */ }
-<View style={styles.chipGroup}>
-  {displayData.sports.map((s, i) => (
-    <View key={`${s.name}-${i}`} style={styles.chip}>
-      <Text style={styles.chipText}>
-        {s.name} • {s.level}
-      </Text>
-    </View>
-  ))}
-</View>
-      </View >
+        {/* sport chips */}
+        <View style={styles.chipGroup}>
+          {displayData.sports.map((s, i) => (
+            <View key={`${s.name}-${i}`} style={styles.chip}>
+              <Text style={styles.chipText}>
+                {s.name} • {s.level}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
 
-  {/* ── Stats Row ── */ }
-  < View style = { styles.statsRow } >
+      {/* ── Stats Row ── */}
+      <View style={styles.statsRow}>
         <StatCard label="Trận Đấu" value={String(profile.stats.matchesPlayed)} />
         <StatCard label="Tỷ Lệ Thắng" value={`${profile.stats.winRate}%`} />
         <StatCard label="Giờ HĐ" value={String(profile.stats.hoursActive)} />
         <StatCard label="Theo Dõi" value={String(profile.stats.followers)} />
-      </View >
+      </View>
 
-  {/* ── Thông Tin Liên Hệ ── */ }
-  < SectionCard title = "Thông Tin Liên Hệ" >
-  {
-    isEditing?(
+      {/* ── Thông Tin Liên Hệ ── */}
+      <SectionCard title="Thông Tin Liên Hệ">
+        {isEditing ? (
           <>
             <FieldInput
               label="Email"
@@ -336,250 +306,219 @@ export default function MyProfile() {
             />
           </>
         ) : (
-  <>
-    <FieldDisplay label="Email" value={displayData.email} />
-    <FieldDisplay label="Số Điện Thoại" value={displayData.phone} />
-  </>
-)}
-      </SectionCard >
-
-  {/* ── Môn Thể Thao ── */ }
-  < SectionCard title = "Môn Thể Thao" >
-  {
-    displayData.sports.length === 0 ? (
-      <Text style={styles.emptyText}>Chưa có môn thể thao nào</Text>
-    ) : (
-      displayData.sports.map((s, idx) => (
-        <View key={`sport-${idx}`} style={styles.listItem}>
-          <View style={styles.listItemLeft}>
-            <Text style={styles.listItemTitle}>{s.name}</Text>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelBadgeText}>{s.level}</Text>
-            </View>
-          </View>
-          {isEditing && (
-            <Pressable onPress={() => removeSport(idx)} style={styles.removeBtn}>
-              <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
-            </Pressable>
-          )}
-        </View>
-      ))
-    )
-  }
-
-{
-  isEditing && (
-    <View style={styles.addBlock}>
-      <Text style={styles.addBlockTitle}>Thêm môn thể thao</Text>
-      <TextInput
-        style={styles.addInput}
-        placeholder="Tên môn (vd: Bóng Bàn)"
-        placeholderTextColor="#555"
-        value={newSportName}
-        onChangeText={setNewSportName}
-      />
-      {/* Level picker */}
-      <Pressable
-        style={styles.levelPickerBtn}
-        onPress={() => setShowLevelPicker(!showLevelPicker)}
-      >
-        <Text style={styles.levelPickerBtnText}>{LEVELS[newSportLevelIdx]}</Text>
-        <Ionicons
-          name={showLevelPicker ? 'chevron-up' : 'chevron-down'}
-          size={14}
-          color="#aaa"
-        />
-      </Pressable>
-      {showLevelPicker &&
-        LEVELS.map((lv, i) => (
-          <Pressable
-            key={lv}
-            style={[styles.levelOption, i === newSportLevelIdx && styles.levelOptionActive]}
-            onPress={() => {
-              setNewSportLevelIdx(i);
-              setShowLevelPicker(false);
-            }}
-          >
-            <Text
-              style={[
-                styles.levelOptionText,
-                i === newSportLevelIdx && styles.levelOptionTextActive,
-              ]}
-            >
-              {lv}
-            </Text>
-          </Pressable>
-        ))}
-      <Pressable style={styles.addBtn} onPress={addSport}>
-        <Ionicons name="add" size={16} color="#fff" />
-        <Text style={styles.addBtnText}>Thêm Môn</Text>
-      </Pressable>
-    </View>
-  )
-}
-      </SectionCard >
-
-  {/* ── Lịch Trình ── */ }
-  < SectionCard title = "Lịch Trình" >
-  {
-    displayData.schedule.length === 0 ? (
-      <Text style={styles.emptyText}>Chưa có lịch trình nào</Text>
-    ) : (
-      displayData.schedule.map((s, idx) => (
-        <View key={`sched-${idx}`} style={styles.scheduleItem}>
-          <View style={styles.scheduleItemLeft}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.scheduleActivity}>{s.activity}</Text>
-              {s.matchId && (
-                <View style={styles.matchBadge}>
-                  <Ionicons name="trophy-outline" size={10} color="#ffb347" />
-                  <Text style={styles.matchBadgeText}>Trận đấu</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.scheduleDay}>{s.day}</Text>
-          </View>
-          <View style={styles.scheduleItemRight}>
-            <Text style={styles.scheduleTime}>{s.time}</Text>
-            {/* Chỉ cho xóa thủ công các lịch không gắn với trận */}
-            {isEditing && !s.matchId && (
-              <Pressable onPress={() => removeSchedule(idx)} style={styles.removeBtn}>
-                <Ionicons name="trash-outline" size={14} color="#ff6b6b" />
-              </Pressable>
-            )}
-            {isEditing && s.matchId && (
-              <Ionicons name="lock-closed-outline" size={13} color="#555" />
-            )}
-          </View>
-        </View>
-      ))
-    )
-  }
-
-{
-  isEditing && (
-    <View style={styles.addBlock}>
-      <Text style={styles.addBlockTitle}>Thêm lịch trình</Text>
-      <TextInput
-        style={styles.addInput}
-        placeholder="Ngày (vd: Thứ 7)"
-        placeholderTextColor="#555"
-        value={newDay}
-        onChangeText={setNewDay}
-      />
-      <TextInput
-        style={styles.addInput}
-        placeholder="Giờ (vd: 18:00 - 20:00)"
-        placeholderTextColor="#555"
-        value={newTime}
-        onChangeText={setNewTime}
-      />
-      <TextInput
-        style={styles.addInput}
-        placeholder="Hoạt động (vd: Bóng Đá)"
-        placeholderTextColor="#555"
-        value={newActivity}
-        onChangeText={setNewActivity}
-      />
-      <Pressable style={styles.addBtn} onPress={addSchedule}>
-        <Ionicons name="add" size={16} color="#fff" />
-        <Text style={styles.addBtnText}>Thêm Lịch Trình</Text>
-      </Pressable>
-    </View>
-  )
-}
-      </SectionCard >
-
-  {/* ── Save / Cancel buttons when editing ── */ }
-{
-  isEditing && (
-    <View style={styles.saveRow}>
-      <Pressable style={[styles.saveBtn, saving && styles.saveBtnDisabled]} onPress={handleSave} disabled={saving}>
-        {saving ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
           <>
-            <Ionicons name="save-outline" size={16} color="#fff" />
-            <Text style={styles.saveBtnText}>Lưu Thay Đổi</Text>
+            <FieldDisplay label="Email" value={displayData.email} />
+            <FieldDisplay label="Số Điện Thoại" value={displayData.phone} />
           </>
         )}
-      </Pressable>
-      <Pressable style={styles.cancelBtnFull} onPress={handleCancel}>
-        <Ionicons name="close" size={16} color="#aaa" />
-        <Text style={styles.cancelBtnText}>Hủy</Text>
-      </Pressable>
-    </View>
-  )
-}
+      </SectionCard>
 
-<View style={styles.actionsRow}>
-  <Pressable
-    style={[styles.secondaryBtn, styles.actionBtn]}
-    onPress={() => router.push('/(tabs)/my-matches')}>
-    <Text style={styles.secondaryBtnText}>Trận của tôi</Text>
-  </Pressable>
-  <Pressable
-    style={[styles.primaryBtn, styles.actionBtn]}
-    onPress={() => router.push('/match/create-match')}>
-    <Text style={styles.primaryBtnText}>+ Tạo trận đấu</Text>
-  </Pressable>
-</View>
-{
-  isOwner ? (
-    <View style={styles.actionsRowSingle}>
-      <Pressable
-        style={[styles.primaryBtn, styles.actionBtn]}
-        onPress={() => router.push('/courts/my-courts' as never)}>
-        <Text style={styles.primaryBtnText}>Quản lý sân của tôi</Text>
-      </Pressable>
-    </View>
-  ) : null
-}
-<View style={styles.actionsRowSingle}>
-  <Pressable
-    style={[styles.secondaryBtn, styles.actionBtn]}
-    onPress={() => {
-      logout();
-      router.replace('/(auth)');
-    }}>
-    <Text style={styles.secondaryBtnText}>Đăng xuất</Text>
-  </Pressable>
-</View>
-{/* ── Action Buttons ── */ }
-{
-  !isEditing && (
-    <View style={styles.actionsBlock}>
-      <Pressable
-        style={styles.primaryBtn}
-        onPress={() => router.push('/match/create-match')}
-      >
-        <Ionicons name="add-circle-outline" size={18} color="#fff" />
-        <Text style={styles.primaryBtnText}>Tạo Trận Đấu</Text>
-      </Pressable>
+      {/* ── Môn Thể Thao ── */}
+      <SectionCard title="Môn Thể Thao">
+        {displayData.sports.length === 0 ? (
+          <Text style={styles.emptyText}>Chưa có môn thể thao nào</Text>
+        ) : (
+          displayData.sports.map((s, idx) => (
+            <View key={`sport-${idx}`} style={styles.listItem}>
+              <View style={styles.listItemLeft}>
+                <Text style={styles.listItemTitle}>{s.name}</Text>
+                <View style={styles.levelBadge}>
+                  <Text style={styles.levelBadgeText}>{s.level}</Text>
+                </View>
+              </View>
+              {isEditing && (
+                <Pressable onPress={() => removeSport(idx)} style={styles.removeBtn}>
+                  <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
+                </Pressable>
+              )}
+            </View>
+          ))
+        )}
 
-      <Pressable
-        style={styles.secondaryBtn}
-        onPress={() => router.push('/(tabs)/my-matches' as never)}
-      >
-        <Ionicons name="trophy-outline" size={16} color="#aaa" />
-        <Text style={styles.secondaryBtnText}>Trận Của Tôi</Text>
-      </Pressable>
+        {isEditing && (
+          <View style={styles.addBlock}>
+            <Text style={styles.addBlockTitle}>Thêm môn thể thao</Text>
+            <TextInput
+              style={styles.addInput}
+              placeholder="Tên môn (vd: Bóng Bàn)"
+              placeholderTextColor="#555"
+              value={newSportName}
+              onChangeText={setNewSportName}
+            />
+            {/* Level picker */}
+            <Pressable
+              style={styles.levelPickerBtn}
+              onPress={() => setShowLevelPicker(!showLevelPicker)}
+            >
+              <Text style={styles.levelPickerBtnText}>{LEVELS[newSportLevelIdx]}</Text>
+              <Ionicons
+                name={showLevelPicker ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color="#aaa"
+              />
+            </Pressable>
+            {showLevelPicker &&
+              LEVELS.map((lv, i) => (
+                <Pressable
+                  key={lv}
+                  style={[styles.levelOption, i === newSportLevelIdx && styles.levelOptionActive]}
+                  onPress={() => {
+                    setNewSportLevelIdx(i);
+                    setShowLevelPicker(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.levelOptionText,
+                      i === newSportLevelIdx && styles.levelOptionTextActive,
+                    ]}
+                  >
+                    {lv}
+                  </Text>
+                </Pressable>
+              ))}
+            <Pressable style={styles.addBtn} onPress={addSport}>
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={styles.addBtnText}>Thêm Môn</Text>
+            </Pressable>
+          </View>
+        )}
+      </SectionCard>
 
-      <Pressable
-        style={[styles.secondaryBtn, { borderColor: '#ff4d4f55' }]}
-        onPress={() => {
-          logout();
-          router.replace('/(auth)');
-        }}
-      >
-        <Ionicons name="log-out-outline" size={16} color="#ff6b6b" />
-        <Text style={[styles.secondaryBtnText, { color: '#ff6b6b' }]}>Đăng Xuất</Text>
-      </Pressable>
-    </View>
-  )
-}
+      {/* ── Lịch Trình ── */}
+      <SectionCard title="Lịch Trình">
+        {displayData.schedule.length === 0 ? (
+          <Text style={styles.emptyText}>Chưa có lịch trình nào</Text>
+        ) : (
+          displayData.schedule.map((s, idx) => (
+            <View key={`sched-${idx}`} style={styles.scheduleItem}>
+              <View style={styles.scheduleItemLeft}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.scheduleActivity}>{s.activity}</Text>
+                  {s.matchId && (
+                    <View style={styles.matchBadge}>
+                      <Ionicons name="trophy-outline" size={10} color="#ffb347" />
+                      <Text style={styles.matchBadgeText}>Trận đấu</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.scheduleDay}>{s.day}</Text>
+              </View>
+              <View style={styles.scheduleItemRight}>
+                <Text style={styles.scheduleTime}>{s.time}</Text>
+                {/* Chỉ cho xóa thủ công các lịch không gắn với trận */}
+                {isEditing && !s.matchId && (
+                  <Pressable onPress={() => removeSchedule(idx)} style={styles.removeBtn}>
+                    <Ionicons name="trash-outline" size={14} color="#ff6b6b" />
+                  </Pressable>
+                )}
+                {isEditing && s.matchId && (
+                  <Ionicons name="lock-closed-outline" size={13} color="#555" />
+                )}
+              </View>
+            </View>
+          ))
+        )}
 
-    </ScrollView >
+        {isEditing && (
+          <View style={styles.addBlock}>
+            <Text style={styles.addBlockTitle}>Thêm lịch trình</Text>
+            <TextInput
+              style={styles.addInput}
+              placeholder="Ngày (vd: Thứ 7)"
+              placeholderTextColor="#555"
+              value={newDay}
+              onChangeText={setNewDay}
+            />
+            <TextInput
+              style={styles.addInput}
+              placeholder="Giờ (vd: 18:00 - 20:00)"
+              placeholderTextColor="#555"
+              value={newTime}
+              onChangeText={setNewTime}
+            />
+            <TextInput
+              style={styles.addInput}
+              placeholder="Hoạt động (vd: Bóng Đá)"
+              placeholderTextColor="#555"
+              value={newActivity}
+              onChangeText={setNewActivity}
+            />
+            <Pressable style={styles.addBtn} onPress={addSchedule}>
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={styles.addBtnText}>Thêm Lịch Trình</Text>
+            </Pressable>
+          </View>
+        )}
+      </SectionCard>
+
+      {/* ── Save / Cancel buttons when editing ── */}
+      {isEditing && (
+        <View style={styles.saveRow}>
+          <Pressable
+            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="save-outline" size={16} color="#fff" />
+                <Text style={styles.saveBtnText}>Lưu Thay Đổi</Text>
+              </>
+            )}
+          </Pressable>
+          <Pressable style={styles.cancelBtnFull} onPress={handleCancel}>
+            <Ionicons name="close" size={16} color="#aaa" />
+            <Text style={styles.cancelBtnText}>Hủy</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── Action Buttons ── */}
+      {!isEditing && (
+        <View style={styles.actionsBlock}>
+          <Pressable
+            style={styles.primaryBtn}
+            onPress={() => router.push('/match/create-match')}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#fff" />
+            <Text style={styles.primaryBtnText}>Tạo Trận Đấu</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.secondaryBtn}
+            onPress={() => router.push('/(tabs)/my-matches' as never)}
+          >
+            <Ionicons name="trophy-outline" size={16} color="#aaa" />
+            <Text style={styles.secondaryBtnText}>Trận Của Tôi</Text>
+          </Pressable>
+
+          {role === 'owner' && (
+            <Pressable
+              style={styles.primaryBtn}
+              onPress={() => router.push('/courts/my-courts' as never)}
+            >
+              <Ionicons name="business-outline" size={18} color="#fff" />
+              <Text style={styles.primaryBtnText}>Quản Lý Sân Của Tôi</Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            style={[styles.secondaryBtn, { borderColor: '#ff4d4f55' }]}
+            onPress={() => {
+              logout();
+              router.replace('/(auth)');
+            }}
+          >
+            <Ionicons name="log-out-outline" size={16} color="#ff6b6b" />
+            <Text style={[styles.secondaryBtnText, { color: '#ff6b6b' }]}>Đăng Xuất</Text>
+          </Pressable>
+        </View>
+      )}
+
+    </ScrollView>
   );
 }
 
@@ -734,9 +673,6 @@ const styles = StyleSheet.create({
     minWidth: 160,
     marginBottom: 4,
   },
-<<<<<<< HEAD
-  profileRole: { color: '#aabbff', fontSize: 13 },
-=======
   profileRole: {
     color: '#bbbbff',
     fontSize: 13,
@@ -775,7 +711,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
->>>>>>> 88f491198664bb8d70eedab35464a8c82d56dd43
   chipGroup: {
     flexDirection: 'row',
     flexWrap: 'wrap',
