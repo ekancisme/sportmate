@@ -60,7 +60,9 @@ async function clearSessionJson() {
   }
 }
 
-type Role = 'user' | 'admin';
+import { resolveAvatarUrl } from "@/lib/userApi";
+
+type Role = "user" | "owner" | "admin";
 
 export type AuthUser = {
   id: string;
@@ -80,7 +82,28 @@ export type AuthUser = {
     followers?: number;
   };
   sports?: { name: string; level: string }[];
-  schedule?: { day: string; time?: string; activity: string }[];
+  schedule?: {
+    day: string;
+    time?: string;
+    activity: string;
+    matchId?: string;
+  }[];
+  favorites?: string[];
+};
+
+export type SuggestedPartner = {
+  id: string;
+  name: string;
+  sport: string;
+  level: string;
+  distance: string | null;
+  winRate: number;
+  bio?: string;
+  age?: number;
+  location?: string;
+  avatar?: string;
+  /** Location có rõ ràng không (tên thành phố/quận vs địa chỉ cụ thể) */
+  isLocationClear?: boolean;
 };
 
 /** Chuẩn hoá user lưu/đọc từ storage (id có thể là id hoặc _id) */
@@ -110,7 +133,9 @@ type AuthContextValue = {
     persistSession?: boolean;
   }) => Promise<{ ok: boolean; error?: string }>;
   /** Gửi mã đặt lại mật khẩu tới email */
-  requestPasswordReset: (email: string) => Promise<{ ok: boolean; error?: string }>;
+  requestPasswordReset: (
+    email: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   /** Đặt lại mật khẩu bằng mã 6 số */
   resetPassword: (options: {
     email: string;
@@ -121,6 +146,20 @@ type AuthContextValue = {
   setUserFromServer: (user: AuthUser) => void;
   /** Đã đọc xong phiên từ storage (tránh flash màn login khi đang restore) */
   authReady: boolean;
+  /** Fetch lại dữ liệu user từ server và cập nhật AuthContext */
+  refreshUser: () => Promise<void>;
+  /** Lấy danh sách partner gợi ý theo location */
+  fetchSuggestedPartners: (options?: {
+    maxDistance?: number;
+    limit?: number;
+    latitude?: number;
+    longitude?: number;
+    userLocation?: string;
+  }) => Promise<{
+    partners: SuggestedPartner[];
+    total: number;
+    userLocation: string | null;
+  }>;
 };
 
 function getApiBaseUrl() {
@@ -132,16 +171,17 @@ function getApiBaseUrl() {
   const hostUri =
     Constants.expoConfig?.hostUri ||
     // fallback cho một số phiên bản Expo cũ
-    // @ts-expect-error manifest có thể không tồn tại trong type mới
-    Constants.manifest?.hostUri;
+    (Constants as { manifest?: { hostUri?: string } }).manifest?.hostUri;
+  // @ts-ignore manifest có thể không tồn tại trong type mới
+  Constants.manifest?.hostUri;
 
   if (hostUri) {
-    const host = hostUri.split(':')[0];
+    const host = hostUri.split(":")[0];
     return `http://${host}:3000`;
   }
 
   // Fallback cuối cùng cho trường hợp chạy web trên chính máy dev
-  return 'http://localhost:3000';
+  return "http://localhost:3000";
 }
 
 const API_BASE_URL = getApiBaseUrl();
@@ -216,17 +256,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   };
 
-  const login: AuthContextValue['login'] = async ({ identifier, password }) => {
+  const login: AuthContextValue["login"] = async ({ identifier, password }) => {
     try {
       setLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier, password }),
       });
       const data = await res.json();
       if (!res.ok) {
-        return { ok: false, error: data?.error || 'Đăng nhập thất bại' };
+        return { ok: false, error: data?.error || "Đăng nhập thất bại" };
       }
       const authUser = normalizeSessionUser(data) ?? (data as AuthUser);
       setUser(authUser);
@@ -234,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await persistUserSession(authUser);
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: 'Không thể kết nối máy chủ' };
+      return { ok: false, error: "Không thể kết nối máy chủ" };
     } finally {
       setLoading(false);
     }
@@ -250,13 +290,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fullName, email, phone, password }),
       });
       const data = await res.json();
       if (!res.ok) {
-        return { ok: false, error: data?.error || 'Đăng ký thất bại' };
+        return { ok: false, error: data?.error || "Đăng ký thất bại" };
       }
       const regUser = normalizeSessionUser(data) ?? (data as AuthUser);
       setUser(regUser);
@@ -265,49 +305,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: 'Không thể kết nối máy chủ' };
+      return { ok: false, error: "Không thể kết nối máy chủ" };
     } finally {
       setLoading(false);
     }
   };
 
-  const requestPasswordReset: AuthContextValue['requestPasswordReset'] = async (email) => {
+  const requestPasswordReset: AuthContextValue["requestPasswordReset"] = async (
+    email,
+  ) => {
     try {
       setLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
-        const base = (data?.error as string) || 'Không thể gửi mã';
-        const detail = data?.detail ? `\n${String(data.detail)}` : '';
+        const base = (data?.error as string) || "Không thể gửi mã";
+        const detail = data?.detail ? `\n${String(data.detail)}` : "";
         return { ok: false, error: base + detail };
       }
       return { ok: true };
     } catch {
-      return { ok: false, error: 'Không thể kết nối máy chủ' };
+      return { ok: false, error: "Không thể kết nối máy chủ" };
     } finally {
       setLoading(false);
     }
   };
 
-  const resetPassword: AuthContextValue['resetPassword'] = async ({ email, code, newPassword }) => {
+  const resetPassword: AuthContextValue["resetPassword"] = async ({
+    email,
+    code,
+    newPassword,
+  }) => {
     try {
       setLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), code: code.trim(), newPassword }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          code: code.trim(),
+          newPassword,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        return { ok: false, error: data?.error || 'Đặt lại mật khẩu thất bại' };
+        return { ok: false, error: data?.error || "Đặt lại mật khẩu thất bại" };
       }
       return { ok: true };
     } catch {
-      return { ok: false, error: 'Không thể kết nối máy chủ' };
+      return { ok: false, error: "Không thể kết nối máy chủ" };
     } finally {
       setLoading(false);
     }
@@ -319,9 +369,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void AsyncStorage.removeItem('sportmate_login').catch(() => {});
   };
 
+  const refreshUser: AuthContextValue["refreshUser"] = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/users/${encodeURIComponent(user.id)}`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      // Giữ nguyên id và role từ authUser hiện tại
+      setUser((prev) =>
+        prev ? { ...prev, ...data, id: prev.id, role: prev.role } : prev,
+      );
+    } catch (e) {
+      console.warn("⚠️ refreshUser failed:", e);
+    }
+  };
+
+  const fetchSuggestedPartners: AuthContextValue["fetchSuggestedPartners"] =
+    async ({
+      maxDistance = 10,
+      limit = 20,
+      latitude,
+      longitude,
+      userLocation,
+    } = {}) => {
+      try {
+        const params = new URLSearchParams({
+          limit: String(limit),
+        });
+
+        if (user?.id) {
+          params.append("userId", user.id);
+        }
+
+        // Truyền tọa độ GPS nếu có
+        if (latitude != null && longitude != null) {
+          params.append("lat", String(latitude));
+          params.append("lng", String(longitude));
+        }
+
+        // Truyền location string nếu có (từ GPS)
+        if (userLocation) {
+          params.append("currentLocation", userLocation);
+        }
+
+        const res = await fetch(
+          `${API_BASE_URL}/api/partners/suggested?${params}`,
+        );
+        const data = await res.json();
+
+        if (!res.ok) {
+          console.error("Fetch partners error:", data?.error);
+          return { partners: [], total: 0, userLocation: null };
+        }
+
+        const raw = data.partners || [];
+        const partners = raw.map((p: SuggestedPartner) => ({
+          ...p,
+          avatar: resolveAvatarUrl(p.avatar),
+        }));
+
+        return {
+          partners,
+          total: data.total || 0,
+          userLocation: data.userLocation,
+        };
+      } catch (error) {
+        console.error("Failed to fetch suggested partners:", error);
+        return { partners: [], total: 0, userLocation: null };
+      }
+    };
+
   const value: AuthContextValue = {
     user,
-    role: (user?.role as Role) || 'user',
+    role: (user?.role as Role) || "user",
     isAuthenticated: !!user,
     loading,
     login,
@@ -331,6 +453,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     setUserFromServer,
     authReady,
+    refreshUser,
+    fetchSuggestedPartners,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -339,8 +463,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return ctx;
 }
-
