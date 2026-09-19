@@ -1,20 +1,20 @@
-import { useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
-import {
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
 import Constants from 'expo-constants';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+    Image,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from 'react-native';
 
-import { useAuth, AuthUser } from '@/contexts/AuthContext';
+import { AuthUser, useAuth } from '@/contexts/AuthContext';
 
 type EditableSport = {
   name: string;

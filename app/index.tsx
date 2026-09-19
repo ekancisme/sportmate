@@ -1,20 +1,25 @@
-import { Redirect, useRootNavigationState } from 'expo-router';
+import { useEffect } from 'react';
+import { useRootNavigationState, useRouter } from 'expo-router';
 
 import { useAuth } from '@/contexts/AuthContext';
 
+/**
+ * Không dùng <Redirect> đồng bộ — dễ race với AsyncStorage.
+ * Chờ nav + authReady rồi router.replace.
+ */
 export default function RootIndex() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, authReady } = useAuth();
+  const router = useRouter();
   const navState = useRootNavigationState();
 
-  // Chờ cho root navigation mount xong rồi mới redirect để tránh lỗi "navigate before mounting"
-  if (!navState?.key) {
-    return null;
-  }
+  useEffect(() => {
+    if (!navState?.key || !authReady) return;
+    if (isAuthenticated) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/(auth)');
+    }
+  }, [navState?.key, authReady, isAuthenticated, router]);
 
-  if (!isAuthenticated) {
-    return <Redirect href="/(auth)" />;
-  }
-
-  return <Redirect href="/(tabs)" />;
+  return null;
 }
-

@@ -1,5 +1,64 @@
-import Constants from "expo-constants";
-import React, { createContext, ReactNode, useContext, useState } from "react";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
+
+const SESSION_KEY = 'sportmate_session';
+/** Bản sao trên Keychain/Keystore (Expo Go iOS/Android ổn định hơn chỉ AsyncStorage) */
+const SECURE_SESSION_KEY = 'sportmate_session_secure';
+
+function utf8ByteLength(s: string): number {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(s).length;
+  }
+  return s.length;
+}
+
+/** Đọc chuỗi phiên: ưu tiên SecureStore (native), sau đó AsyncStorage + migrate */
+async function readSessionJson(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return AsyncStorage.getItem(SESSION_KEY);
+  }
+  try {
+    const fromSecure = await SecureStore.getItemAsync(SECURE_SESSION_KEY);
+    if (fromSecure) return fromSecure;
+    const fromAsync = await AsyncStorage.getItem(SESSION_KEY);
+    if (fromAsync && utf8ByteLength(fromAsync) <= 2040) {
+      try {
+        await SecureStore.setItemAsync(SECURE_SESSION_KEY, fromAsync);
+      } catch {
+        // bỏ qua giới hạn 2048 byte trên iOS
+      }
+    }
+    return fromAsync;
+  } catch {
+    return AsyncStorage.getItem(SESSION_KEY);
+  }
+}
+
+/** Ghi phiên: luôn AsyncStorage + mirror SecureStore nếu đủ nhỏ (giới hạn iOS ~2048 byte) */
+async function writeSessionJson(json: string) {
+  await AsyncStorage.setItem(SESSION_KEY, json);
+  if (Platform.OS === 'web') return;
+  try {
+    if (utf8ByteLength(json) <= 2040) {
+      await SecureStore.setItemAsync(SECURE_SESSION_KEY, json);
+    }
+  } catch {
+    // chỉ giữ AsyncStorage
+  }
+}
+
+async function clearSessionJson() {
+  await AsyncStorage.removeItem(SESSION_KEY);
+  if (Platform.OS === 'web') return;
+  try {
+    await SecureStore.deleteItemAsync(SECURE_SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 import { resolveAvatarUrl } from "@/lib/userApi";
 
@@ -47,6 +106,15 @@ export type SuggestedPartner = {
   isLocationClear?: boolean;
 };
 
+/** Chuẩn hoá user lưu/đọc từ storage (id có thể là id hoặc _id) */
+function normalizeSessionUser(raw: unknown): AuthUser | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const idVal = o.id ?? o._id;
+  if (idVal == null || String(idVal).trim() === '') return null;
+  return { ...(o as object), id: String(idVal) } as AuthUser;
+}
+
 type AuthContextValue = {
   user: AuthUser | null;
   role: Role;
@@ -61,6 +129,8 @@ type AuthContextValue = {
     email: string;
     phone?: string;
     password: string;
+    /** Mặc định lưu phiên sau khi đăng ký thành công */
+    persistSession?: boolean;
   }) => Promise<{ ok: boolean; error?: string }>;
   /** Gửi mã đặt lại mật khẩu tới email */
   requestPasswordReset: (
@@ -74,6 +144,8 @@ type AuthContextValue = {
   }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   setUserFromServer: (user: AuthUser) => void;
+  /** Đã đọc xong phiên từ storage (tránh flash màn login khi đang restore) */
+  authReady: boolean;
   /** Fetch lại dữ liệu user từ server và cập nhật AuthContext */
   refreshUser: () => Promise<void>;
   /** Lấy danh sách partner gợi ý theo location */
@@ -116,12 +188,72 @@ const API_BASE_URL = getApiBaseUrl();
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+async function persistUserSession(u: AuthUser | null) {
+  try {
+    if (u) {
+      const normalized = normalizeSessionUser(u);
+      if (!normalized) {
+        if (__DEV__) {
+          console.warn('[Auth] Không lưu phiên: thiếu id hợp lệ');
+        }
+        return;
+      }
+      const payload = JSON.stringify(normalized);
+      await writeSessionJson(payload);
+    } else {
+      await clearSessionJson();
+    }
+  } catch (e) {
+    if (__DEV__) {
+      console.warn('[Auth] Lưu phiên thất bại:', e);
+    }
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+
+  /** Khôi phục phiên đã lưu — không dùng `cancelled` skip setAuthReady (React Strict Mode dev hay làm authReady không bao giờ true) */
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await readSessionJson();
+        if (raw) {
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            parsed = null;
+          }
+          const userFromStore = normalizeSessionUser(parsed);
+          if (userFromStore) {
+            setUser(userFromStore);
+          } else if (__DEV__ && raw) {
+            console.warn('[Auth] Phiên trong storage không hợp lệ (thiếu id), đã bỏ qua');
+          }
+        }
+      } catch (e) {
+        if (__DEV__) console.warn('[Auth] Đọc phiên thất bại:', e);
+      } finally {
+        setAuthReady(true);
+      }
+    })();
+  }, []);
 
   const setUserFromServer = (u: AuthUser) => {
     setUser(u);
+    void (async () => {
+      try {
+        const raw = await readSessionJson();
+        if (raw) {
+          await persistUserSession(u);
+        }
+      } catch {
+        // ignore
+      }
+    })();
   };
 
   const login: AuthContextValue["login"] = async ({ identifier, password }) => {
@@ -136,7 +268,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         return { ok: false, error: data?.error || "Đăng nhập thất bại" };
       }
-      setUser(data);
+      const authUser = normalizeSessionUser(data) ?? (data as AuthUser);
+      setUser(authUser);
+      // Luôn lưu phiên: reload Expo / mở lại app vẫn đăng nhập. "Remember me" trên UI chỉ lưu email/mật khẩu.
+      await persistUserSession(authUser);
       return { ok: true };
     } catch (error) {
       return { ok: false, error: "Không thể kết nối máy chủ" };
@@ -145,11 +280,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register: AuthContextValue["register"] = async ({
+  const register: AuthContextValue['register'] = async ({
     fullName,
     email,
     phone,
     password,
+    persistSession = true,
   }) => {
     try {
       setLoading(true);
@@ -162,7 +298,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         return { ok: false, error: data?.error || "Đăng ký thất bại" };
       }
-      setUser(data);
+      const regUser = normalizeSessionUser(data) ?? (data as AuthUser);
+      setUser(regUser);
+      if (persistSession) {
+        await persistUserSession(regUser);
+      }
       return { ok: true };
     } catch (error) {
       return { ok: false, error: "Không thể kết nối máy chủ" };
@@ -225,6 +365,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null);
+    void persistUserSession(null);
+    void AsyncStorage.removeItem('sportmate_login').catch(() => {});
   };
 
   const refreshUser: AuthContextValue["refreshUser"] = async () => {
@@ -310,6 +452,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetPassword,
     logout,
     setUserFromServer,
+    authReady,
     refreshUser,
     fetchSuggestedPartners,
   };
